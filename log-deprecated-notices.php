@@ -58,8 +58,6 @@ class Nacin_Deprecated {
 		add_action( 'admin_print_styles',               array( &$this, 'action_admin_print_styles' ), 20 );
 		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
 		add_filter( "manage_{$this->pt}_posts_columns", array( &$this, 'filter_manage_post_type_posts_columns' ) );
-		add_filter( 'post_row_actions',                 array( &$this, 'filter_post_row_actions' ), 10, 2 );
-		add_filter( 'display_post_states',              array( &$this, 'filter_display_post_states' ) );
 	}
 
 	/**
@@ -180,6 +178,14 @@ class Nacin_Deprecated {
 	 */
 	function action_manage_posts_custom_column( $col, $post_id ) {
 		switch ( $col ) {
+			case 'deprecated_title' :
+				// We just want a 'Delete' link. Trash here is excessive.
+				// @todo [core] Custom post types should be able to disable trash.
+				$post = get_post( $post_id );
+				echo '<strong>' . esc_html( $post->post_title ) . '</strong>';
+				echo '<br/>' . esc_html( $post->post_excerpt );
+				echo '<div class="row-actions"><span class="delete"><a class="submitdelete" title="' . esc_attr( __('Delete') ) . '" href="' . get_delete_post_link( $post_id, '', true ) . '">' . __( 'Delete' ) . '</a></span></div>';
+				break;
 			case 'deprecated_count' :
 				$post = get_post( $post_id );
 				$count = $post->comment_count ? $post->comment_count : 1; // Caching. Don't want 0
@@ -194,32 +200,9 @@ class Nacin_Deprecated {
 				break;
 			case 'deprecated_alternative':
 				$post = get_post( $post_id );
-				echo nl2br( preg_replace( '/<!--more(.*?)?-->(.*)/s', '', $post->post_content ) );
+				echo nl2br( esc_html( preg_replace( '/<!--more(.*?)?-->(.*)/s', '', $post->post_content ) ) );
 				break;
 		}
-	}
-
-	/**
-	 * Attached to display_post_states filter.
-	 *
-	 * Removes the 'Draft' post state.
-	 * @todo Probably could just use publish; the post type is !public anyway.
-	 */
-	function filter_display_post_states( $states ) {
-		global $post;
-		return $this->pt == $post->post_type ? array() : $states;
-	}
-
-	/**
-	 * Attached to post_row_actions filter.
-	 *
-	 * We just want a 'Delete' link. Trash here is excessive.
-	 * @todo [core] Custom post types should be able to disable trash.
-	 */
-	function filter_post_row_actions( $actions, $post ) {
-		if ( $this->pt != $post->post_type )
-			return $actions;
-		return array( 'delete' => "<a class='submitdelete' title='" . esc_attr( __('Delete') ) . "' href='" . get_delete_post_link( $post->ID, '', true ) . "'>" . __( 'Delete' ) . '</a>' );
 	}
 
 	/**
@@ -231,26 +214,24 @@ class Nacin_Deprecated {
 	 * @todo Filter on type (file/function/argument), filter on specific function etc.
 	 */
 	function filter_manage_post_type_posts_columns( $cols ) {
-		unset( $cols['author'], $cols['cb'], $cols['date'] );
 		// @todo Can't use cb as it expects edit_post and doesn't check delete_post.
-		$cols['title'] = __('Deprecated Call');
-		//$cols['deprecated_version'] = __('Version');
-		$cols['deprecated_alternative'] = __('Alternative');
-		$cols['deprecated_count'] = __('Count');
-		$cols['deprecated_modified'] = __('Last Used');
+		$cols = array(
+			'deprecated_title' => __('Deprecated Call'),
+		//	'deprecated_version' => __('Version'),
+			'deprecated_alternative' => __('Alternative'),
+			'deprecated_count' => __('Count'),
+			'deprecated_modified' => __('Last Used'),
+		);
 		return $cols;
 	}
 
 	/**
-	 * Prints basic CSS. Also some unrelated cheap hacks.
+	 * Prints basic CSS. Also an unrelated cheap hack.
 	 */
 	function action_admin_print_styles() {
 		global $current_screen;
 		if ( 'edit-' . $this->pt != $current_screen->id )
 			return;
-
-		// Cheap hack.
-		$_GET['mode'] = 'excerpt';
 
 		// Hides 'Mine (X)', though I hide those via CSS anyway. Again, cheap hack.
 		$GLOBALS['user_posts'] = false;

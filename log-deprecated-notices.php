@@ -10,6 +10,7 @@
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
+ * Site Wide Only: true
  */
 
 /**
@@ -83,9 +84,17 @@ class Nacin_Deprecated {
 	 */
 	function log_argument( $function, $message, $version ) {
 		$backtrace = debug_backtrace();
-		$in_file = $this->strip_abspath( $backtrace[4]['file'] );
-		$on_line = $backtrace[4]['line'];
 		$deprecated = $function . '()';
+		switch ( $backtrace[4]['function'] ) {
+			case 'get_plugin_data' :
+				$in_file = $this->strip_abspath( $backtrace[4]['args'][0] );
+				$on_line = 0;
+				break;
+			default :
+				$in_file = $this->strip_abspath( $backtrace[4]['file'] );
+				$on_line = $backtrace[4]['line'];
+				break;
+		}
 		$this->log( 'argument', compact( 'deprecated', 'message', 'version', 'in_file', 'on_line' ) );
 	}
 
@@ -147,10 +156,14 @@ class Nacin_Deprecated {
 			$content = __( 'No alternative available.' );
 		$content .= "\n" . sprintf( __( 'Deprecated in version %s.' ), $version );
 
-		if ( isset( $hook ) )
+		if ( isset( $hook ) ) {
 			$excerpt = sprintf( __( 'Attached to the %1$s hook, fired in %2$s on line %3$d.' ), $hook, $in_file, $on_line );
-		else
-			$excerpt = sprintf( __( 'Used in %1$s on line %2$d.' ), $in_file, $on_line );
+		} else {
+			if ( $on_line )
+				$excerpt = sprintf( __( 'Used in %1$s on line %2$d.' ), $in_file, $on_line );
+			else
+				$excerpt = sprintf( __( 'Used in %1$s.' ), $in_file );
+		}
 
 		$post_name = md5( $type . implode( $args ) );
 
@@ -200,7 +213,7 @@ class Nacin_Deprecated {
 				break;
 			case 'deprecated_alternative':
 				$post = get_post( $post_id );
-				echo nl2br( esc_html( preg_replace( '/<!--more(.*?)?-->(.*)/s', '', $post->post_content ) ) );
+				echo nl2br( preg_replace( '/<!--more(.*?)?-->(.*)/s', '', $post->post_content ) );
 				break;
 		}
 	}

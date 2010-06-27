@@ -255,7 +255,7 @@ class Nacin_Deprecated {
 .widefat .column-deprecated_modified, .widefat .column-deprecated_version { width: 10%; }
 .widefat .column-deprecated_count { width: 10%; text-align: right }
 .widefat .column-deprecated_cb { padding: 0; width: 2.2em }
-#icon-edit { background: url(http://localhost/trunk/wp-admin/images/icons32.png?ver=20100531) no-repeat -370px -5px; }
+#icon-edit { background: url(http://localhost/trunk/wp-admin/images/icons32.png?ver=20100531) no-repeat -432px -5px; }
 </style>
 	<?php
 	}

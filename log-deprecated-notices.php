@@ -56,8 +56,8 @@ class Nacin_Deprecated {
 
 		add_action( 'admin_menu',                       array( &$this, 'action_admin_menu' ) );
 		add_action( 'admin_print_styles',               array( &$this, 'action_admin_print_styles' ), 20 );
+		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
 		add_filter( "manage_{$this->pt}_posts_columns", array( &$this, 'filter_manage_post_type_posts_columns' ) );
-		add_filter( 'manage_posts_custom_column',       array( &$this, 'filter_manage_posts_custom_column' ), 10, 2 );
 		add_filter( 'post_row_actions',                 array( &$this, 'filter_post_row_actions' ), 10, 2 );
 		add_filter( 'display_post_states',              array( &$this, 'filter_display_post_states' ) );
 	}
@@ -154,7 +154,7 @@ class Nacin_Deprecated {
 		else
 			$excerpt = sprintf( __( 'Used in %1$s on line %2$d.' ), $in_file, $on_line );
 
-		$post_name = md5( $type . serialize( $args ) );
+		$post_name = md5( $type . implode( $args ) );
 
 		if ( ! isset( $existing[ $post_name ] ) ) {
 			$post_id = wp_insert_post( array(
@@ -176,9 +176,9 @@ class Nacin_Deprecated {
 	}
 
 	/**
-	 * Attached to manage_posts_custom_column filter.
+	 * Attached to manage_posts_custom_column action.
 	 */
-	function filter_manage_posts_custom_column( $col, $post_id ) {
+	function action_manage_posts_custom_column( $col, $post_id ) {
 		switch ( $col ) {
 			case 'deprecated_count' :
 				$post = get_post( $post_id );
@@ -207,9 +207,7 @@ class Nacin_Deprecated {
 	 */
 	function filter_display_post_states( $states ) {
 		global $post;
-		if ( $this->pt != $post->post_type )
-			return $states;
-		$states = array();
+		return $this->pt == $post->post_type ? array() : $states;
 	}
 
 	/**

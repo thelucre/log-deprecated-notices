@@ -154,7 +154,7 @@ class Nacin_Deprecated {
 		else
 			$excerpt = sprintf( __( 'Used in %1$s on line %2$d.' ), $in_file, $on_line );
 
-		$post_name = md5( $type . implode( $args ) );
+		$post_name = md5( $type . serialize( $args ) );
 
 		if ( ! isset( $existing[ $post_name ] ) ) {
 			$post_id = wp_insert_post( array(

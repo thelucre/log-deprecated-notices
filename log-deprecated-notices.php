@@ -96,11 +96,11 @@ class Nacin_Deprecated {
 	}
 
 	/**
-	 * Strip ABSPATH from an absolute file.
+	 * Strip ABSPATH from an absolute filepath.
 	 */
 	function strip_abspath( $path ) {
 		$path = str_replace( '\\', '/', $path ); // Windows is lame.
-		$path = str_replace( ABSPATH, '', $path );
+		return str_replace( ABSPATH, '', $path );
 	}
 
 	/**
@@ -172,7 +172,8 @@ class Nacin_Deprecated {
 		switch ( $col ) {
 			case 'deprecated_count' :
 				$post = get_post( $post_id );
-				echo number_format_i18n( $post->comment_count );
+				$count = $post->comment_count ? $post->comment_count : 1; // Caching. Don't want 0
+				echo number_format_i18n( $count );
 				break;
 			case 'deprecated_modified' :
 				echo get_the_date( __('Y/m/d g:i:s A' ) );

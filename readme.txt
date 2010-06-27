@@ -23,7 +23,7 @@ This plugin is uninstallable. It will remove log entries on uninstall.
 
 1. Upload `log-deprecated-notices.php` to the `/wp-content/plugins/` directory
 2. Activate the plugin through the 'Plugins' menu in WordPress
-3. View the log in the 'Plugins' menu, under 'Deprecated Calls'
+3. View the log in the 'Tools' menu, under 'Deprecated Calls'
 
 This plugin is uninstallable. It will remove log entries on uninstall.
 

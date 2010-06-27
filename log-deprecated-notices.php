@@ -20,6 +20,7 @@
  * @todo Finish i18n'ing
  * @todo Menu bubble letting you know you have notices you haven't looked at yet.
  * @todo Plugin ID. Also, notice on plugins page next to said plugin.
+ * @todo Known issue -- the backtrace needs to be inspected better (if it was attached to a hook, for example).
  */
 class Nacin_Deprecated {
 
@@ -66,7 +67,7 @@ class Nacin_Deprecated {
 	 */
 	function log_function( $function, $replacement, $version ) {
 		$backtrace = debug_backtrace();
-		$in_file = str_replace( ABSPATH, '', $backtrace[4]['file'] );
+		$in_file = $this->strip_abspath( $backtrace[4]['file'] );
 		$on_line = $backtrace[4]['line'];
 		$deprecated = $function . '()';
 		$this->log( 'function', compact( 'deprecated', 'replacement', 'version', 'in_file', 'on_line' ) );
@@ -77,7 +78,7 @@ class Nacin_Deprecated {
 	 */
 	function log_argument( $function, $message, $version ) {
 		$backtrace = debug_backtrace();
-		$in_file = str_replace( ABSPATH, '', $backtrace[4]['file'] );
+		$in_file = $this->strip_abspath( $backtrace[4]['file'] );
 		$on_line = $backtrace[4]['line'];
 		$deprecated = $function . '()';
 		$this->log( 'argument', compact( 'deprecated', 'message', 'version', 'in_file', 'on_line' ) );
@@ -88,10 +89,18 @@ class Nacin_Deprecated {
 	 */
 	function log_file( $file, $replacement, $version, $message ) {
 		$backtrace = debug_backtrace();
-		$deprecated = str_replace( ABSPATH, '', $backtrace[3]['file'] );
-		$in_file = str_replace( ABSPATH, '', $backtrace[4]['file'] );
+		$deprecated = $this->strip_abspath( $backtrace[3]['file'] );
+		$in_file = $this->strip_abspath( $backtrace[4]['file'] );
 		$on_line = $backtrace[4]['line'];
 		$this->log( 'file', compact( 'deprecated', 'replacement', 'message', 'version', 'in_file', 'on_line' ) );
+	}
+
+	/**
+	 * Strip ABSPATH from an absolute file.
+	 */
+	function strip_abspath( $path ) {
+		$path = str_replace( '\\', '/', $path ); // Windows is lame.
+		$path = str_replace( ABSPATH, '', $path );
 	}
 
 	/**
@@ -173,7 +182,9 @@ class Nacin_Deprecated {
 				echo $meta['version'];
 				break;
 			case 'deprecated_alternative':
-				the_content( '' );
+				$post = get_post( $post_id );
+				echo nl2br( preg_replace( '/<!--more(.*?)?-->(.*)/s', '', $post->post_content ) );
+				break;
 		}
 	}
 
@@ -256,7 +267,7 @@ class Nacin_Deprecated {
 	function action_admin_menu() {
 		global $menu, $submenu;
 		unset( $menu[2048] );
-		$submenu['plugins.php'][] = array( __( 'Deprecated Calls' ), 'activate_plugins', 'edit.php?post_type=' . $this->pt );
+		$submenu['tools.php'][] = array( __( 'Deprecated Calls' ), 'activate_plugins', 'edit.php?post_type=' . $this->pt );
 	}
 
 	/**

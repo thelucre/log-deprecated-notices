@@ -10,7 +10,6 @@
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
- * Site Wide Only: true
  */
 
 /**

@@ -1,6 +1,6 @@
 === Log Deprecated Notices ===
 Contributors: nacin
-Tags: deprecated, logging, admin
+Tags: deprecated, logging, admin, WP_DEBUG, E_NOTICE
 Requires at least: 3.0
 Tested up to: 3.1-alpha
 Stable tag: trunk

@@ -67,10 +67,17 @@ class Nacin_Deprecated {
 	 */
 	function log_function( $function, $replacement, $version ) {
 		$backtrace = debug_backtrace();
-		$in_file = $this->strip_abspath( $backtrace[4]['file'] );
-		$on_line = $backtrace[4]['line'];
 		$deprecated = $function . '()';
-		$this->log( 'function', compact( 'deprecated', 'replacement', 'version', 'in_file', 'on_line' ) );
+		$hook = null;
+		$bt = 4;
+		// Check if we're a hook callback.
+		if ( ! isset( $backtrace[4]['file'] ) && 'call_user_func_array' == $backtrace[5]['function'] ) {
+			$hook = $backtrace[6]['args'][0];
+			$bt = 6;
+		}
+		$in_file = $this->strip_abspath( $backtrace[ $bt ]['file'] );
+		$on_line = $backtrace[ $bt ]['line'];
+		$this->log( 'function', compact( 'deprecated', 'replacement', 'version', 'hook', 'in_file', 'on_line'  ) );
 	}
 
 	/**
@@ -142,7 +149,10 @@ class Nacin_Deprecated {
 			$content = __( 'No alternative available.' );
 		$content .= "\n" . sprintf( __( 'Deprecated in version %s.' ), $version );
 
-		$excerpt = sprintf( __( 'Used in %1$s on line %2$d.' ), $in_file, $on_line );
+		if ( isset( $hook ) )
+			$excerpt = sprintf( __( 'Attached to the %1$s hook, fired in %2$s on line %3$d.' ), $hook, $in_file, $on_line );
+		else
+			$excerpt = sprintf( __( 'Used in %1$s on line %2$d.' ), $in_file, $on_line );
 
 		$post_name = md5( $type . implode( $args ) );
 

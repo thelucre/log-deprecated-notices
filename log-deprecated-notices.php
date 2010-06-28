@@ -6,7 +6,7 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.1-beta-2
+ * Version: 0.1-beta-3
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
@@ -51,9 +51,6 @@ class Nacin_Deprecated {
 		if ( ! is_admin() )
 			return;
 
-		if ( is_multisite() && ! is_super_admin() )
-			return;
-
 		add_action( 'admin_menu',                       array( &$this, 'action_admin_menu' ) );
 		add_action( 'admin_print_styles',               array( &$this, 'action_admin_print_styles' ), 20 );
 		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
@@ -84,23 +81,47 @@ class Nacin_Deprecated {
 	function log_argument( $function, $message, $version ) {
 		$backtrace = debug_backtrace();
 		$deprecated = $function . '()';
-		// @todo [core] Introduce _deprecated_message()
-		switch ( $backtrace[4]['function'] ) {
+		$menu = $in_file = $on_line = null;
+		// @todo [core] Introduce _deprecated_message() or something.
+		switch ( $function ) {
+			case 'options.php' :
+				$deprecated = __( 'Unregistered Setting' );
+				$this->log( 'functionality', compact( 'deprecated', 'message', 'version' ) );
+				return;
 			case 'has_cap' :
-				$in_file = $this->strip_abspath( $backtrace[6]['file'] );
-				$on_line = $backtrace[6]['line'];
-				$deprecated = 'current_user_can()';
+				if ( 0 === strpos( $backtrace[7]['function'], 'add_' ) && '_page' == substr( $backtrace[7]['function'], -5 ) ) {
+					$bt = 7;
+					if ( 0 === strpos( $backtrace[8]['function'], 'add_' ) && '_page' == substr( $backtrace[8]['function'], -5 ) )
+						$bt = 8;
+					$in_file = $this->strip_abspath( $backtrace[ $bt ]['file'] );
+					$on_line = $backtrace[ $bt ]['line'];
+					$deprecated = $backtrace[ $bt ]['function'] . '()';
+				} elseif ( '_wp_menu_output' == $backtrace[7]['function'] ) {
+					$deprecated = 'current_user_can()';
+					$menu = true;
+				} else {
+					$in_file = $this->strip_abspath( $backtrace[6]['file'] );
+					$on_line = $backtrace[6]['line'];
+					$deprecated = 'current_user_can()';
+				}
 				break;
 			case 'get_plugin_data' :
 				$in_file = $this->strip_abspath( $backtrace[4]['args'][0] );
-				$on_line = 0;
 				break;
+			case 'define()' :
+			case 'define' :
+				if ( 'ms_subdomain_constants' == $backtrace[4]['function'] ) {
+					$deprecated = 'VHOST';
+					$this->log( 'constant', compact( 'deprecated', 'message', 'menu', 'version' ) );
+					return;
+				}
+				// Fall through.
 			default :
 				$in_file = $this->strip_abspath( $backtrace[4]['file'] );
 				$on_line = $backtrace[4]['line'];
 				break;
 		}
-		$this->log( 'argument', compact( 'deprecated', 'message', 'version', 'in_file', 'on_line' ) );
+		$this->log( 'argument', compact( 'deprecated', 'message', 'menu', 'version', 'in_file', 'on_line' ) );
 	}
 
 	/**
@@ -142,6 +163,12 @@ class Nacin_Deprecated {
 		extract( $args );
 
 		switch ( $type ) {
+			case 'functionality' :
+				$deprecated = sprintf( __( 'Functionality: %s' ), $deprecated );
+				break;
+			case 'constant' :
+				$deprecated  = sprintf( __( 'Constant: %s' ), $deprecated );
+				break;
 			case 'function' :
 				$deprecated = sprintf( __( 'Function: %s' ), $deprecated );
 				break;
@@ -154,20 +181,24 @@ class Nacin_Deprecated {
 		}
 
 		$content = '';
-		if ( $replacement )
+		if ( ! empty( $replacement ) )
 			$content = sprintf( __( 'Use %s instead.' ), $replacement );
-		$content .= (string) $message;
-		if ( ! $content )
+		if ( ! empty( $message ) )
+			$content .= (string) $message;
+		if ( ! empty( $content ) )
 			$content = __( 'No alternative available.' );
 		$content .= "\n" . sprintf( __( 'Deprecated in version %s.' ), $version );
 
-		if ( isset( $hook ) ) {
+		if ( ! empty( $hook ) ) {
 			$excerpt = sprintf( __( 'Attached to the %1$s hook, fired in %2$s on line %3$d.' ), $hook, $in_file, $on_line );
+		} elseif ( ! empty( $menu ) ) {
+			$excerpt = __( 'An admin menu page is using user levels instead of capabilities. There is likely a related log item with specifics.' );
+		} elseif ( ! empty( $on_line ) ) {
+			$excerpt = sprintf( __( 'Used in %1$s on line %2$d.' ), $in_file, $on_line );
+		} elseif ( ! empty( $in_file ) ) {
+			$excerpt = sprintf( __( 'Used in %1$s.' ), $in_file );
 		} else {
-			if ( $on_line )
-				$excerpt = sprintf( __( 'Used in %1$s on line %2$d.' ), $in_file, $on_line );
-			else
-				$excerpt = sprintf( __( 'Used in %1$s.' ), $in_file );
+			$excerpt = '';
 		}
 
 		$post_name = md5( $type . implode( $args ) );
@@ -275,7 +306,7 @@ class Nacin_Deprecated {
 	function action_admin_menu() {
 		global $menu, $submenu;
 		unset( $menu[2048] );
-		$submenu['tools.php'][] = array( __( 'Deprecated Calls' ), 'activate_plugins', 'edit.php?post_type=' . $this->pt );
+		add_submenu_page( 'tools.php', __( 'Deprecated Calls' ), 'activate_plugins', 'edit.php?post_type=' . $this->pt );
 	}
 
 	/**

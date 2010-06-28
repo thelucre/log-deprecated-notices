@@ -15,7 +15,7 @@ This is a plugin for developers. WP_DEBUG is not needed, though its general usag
 
 Please report any bugs to plugins at [andrewnacin.com](http://andrewnacin.com/), or find me in IRC #wordpress-dev or @[nacin](http://twitter.com/nacin) on Twitter.
 
-This is beta software. It works, but there's a lot left on the todo (check out the Ideas tab). Have an idea? Let me know.
+This is beta software. It works, but there's a lot left on the todo (check out the Other Notes tab). Have an idea? Let me know.
 
 == Installation ==
 

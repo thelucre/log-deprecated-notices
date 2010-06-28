@@ -6,7 +6,7 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.1-beta-3
+ * Version: 0.1-beta-4
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2

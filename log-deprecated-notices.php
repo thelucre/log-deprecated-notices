@@ -59,8 +59,10 @@ class Nacin_Deprecated {
 		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
 		add_filter( "manage_{$this->pt}_posts_columns", array( &$this, 'filter_manage_post_type_posts_columns' ) );
 		add_action( 'restrict_manage_posts',            array( &$this, 'action_restrict_manage_posts' ) );
-		add_action( 'load-edit.php',                    array( &$this, 'action_load_edit_php' ) );
 		add_action( 'admin_footer-edit.php',            array( &$this, 'action_admin_footer_edit_php' ) );
+
+		foreach ( array( 'edit.php', 'post.php', 'post-new.php' ) as $item )
+			add_action( "load-{$item}",                 array( &$this, 'action_load_edit_php' ) );
 	}
 
 	/**
@@ -284,7 +286,6 @@ class Nacin_Deprecated {
 		$GLOBALS['user_posts'] = false;
 
 		// Hides Add New button, bulk actions, sets some column widths, uses the plugins screen icon.
-		// @todo Should probably actually disable new posts.
 	?>
 <style type="text/css">
 .add-new-h2, .view-switch, .subsubsub,
@@ -336,12 +337,16 @@ jQuery(document).ready( function($) {
 	}
 
 	/**
-	 * Cheap hack so 'Empty Trash' works.
+	 * Cheap hack so 'Empty Trash' works. Also, janky permissions.
 	 */
 	function action_load_edit_php() {
 		global $current_screen;
-		if ( 'edit-' . $this->pt != $current_screen->id )
-			return;
+		if ( 'edit-' . $this->pt != $current_screen->id ) {
+			if ( $this->pt == $current_screen->id )
+				wp_die( __( 'Invalid post type.' ) );
+			return;	
+		}
+
 		if ( isset( $_GET['delete_all'] ) || isset( $_GET['delete_all2'] ) )
 			$_GET['post_status'] = 'draft';
 	}

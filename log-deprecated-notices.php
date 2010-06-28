@@ -17,7 +17,6 @@
  *
  * @package Nacin_Deprecated
  *
- * @todo Finish i18n'ing
  * @todo Menu bubble letting you know you have notices you haven't looked at yet.
  * @todo Plugin ID. Also, notice on plugins page next to said plugin.
  */
@@ -54,6 +53,7 @@ class Nacin_Deprecated {
 		if ( ! is_admin() )
 			return;
 
+		add_action( 'admin_init',                       array( &$this, 'action_admin_init' ) );
 		add_action( 'admin_menu',                       array( &$this, 'action_admin_menu' ) );
 		add_action( 'admin_print_styles',               array( &$this, 'action_admin_print_styles' ), 20 );
 		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
@@ -63,6 +63,13 @@ class Nacin_Deprecated {
 
 		foreach ( array( 'edit.php', 'post.php', 'post-new.php' ) as $item )
 			add_action( "load-{$item}",                 array( &$this, 'action_load_edit_php' ) );
+	}
+
+	/**
+	 * Attached to admin_init. Loads the textdomain.
+	 */
+	function action_admin_init() {
+		load_plugin_textdomain('log-deprecated', null, dirname( plugin_basename( __FILE__ ) ) . '/languages/' );
 	}
 
 	/**
@@ -93,7 +100,7 @@ class Nacin_Deprecated {
 		// @todo [core] Introduce _deprecated_message() or something.
 		switch ( $function ) {
 			case 'options.php' :
-				$deprecated = __( 'Unregistered Setting' );
+				$deprecated = __( 'Unregistered Setting', 'log-deprecated' );
 				$this->log( 'functionality', compact( 'deprecated', 'message', 'version' ) );
 				return;
 			case 'has_cap' :
@@ -166,39 +173,41 @@ class Nacin_Deprecated {
 
 		switch ( $type ) {
 			case 'functionality' :
-				$deprecated = sprintf( __( 'Functionality: %s' ), $deprecated );
+				$deprecated = sprintf( __( 'Functionality: %s', 'log-deprecated' ), $deprecated );
 				break;
 			case 'constant' :
-				$deprecated  = sprintf( __( 'Constant: %s' ), $deprecated );
+				$deprecated  = sprintf( __( 'Constant: %s', 'log-deprecated' ), $deprecated );
 				break;
 			case 'function' :
-				$deprecated = sprintf( __( 'Function: %s' ), $deprecated );
+				$deprecated = sprintf( __( 'Function: %s', 'log-deprecated' ), $deprecated );
 				break;
 			case 'file' :
-				$deprecated = sprintf( __( 'File: %s' ), $deprecated );
+				$deprecated = sprintf( __( 'File: %s', 'log-deprecated' ), $deprecated );
 				break;
 			case 'argument' :
-				$deprecated = sprintf( __( 'Argument in %s' ), $deprecated );
+				$deprecated = sprintf( __( 'Argument in %s', 'log-deprecated' ), $deprecated );
 				break;
 		}
 
 		$content = '';
 		if ( ! empty( $replacement ) )
-			$content = sprintf( __( 'Use %s instead.' ), $replacement );
+			// translators: %s is name of function.
+			$content = sprintf( __( 'Use %s instead.', 'log-deprecated' ), $replacement );
 		if ( ! empty( $message ) )
 			$content .= ( strlen( $content ) ? ' ' : '' ) . (string) $message;
 		if ( empty( $content ) )
-			$content = __( 'No alternative available.' );
-		$content .= "\n" . sprintf( __( 'Deprecated in version %s.' ), $version );
+			$content = __( 'No alternative available.', 'log-deprecated' );
+		$content .= "\n" . sprintf( __( 'Deprecated in version %s.', 'log-deprecated' ), $version );
 
 		if ( ! empty( $hook ) ) {
-			$excerpt = sprintf( __( 'Attached to the %1$s hook, fired in %2$s on line %3$d.' ), $hook, $in_file, $on_line );
+			$excerpt = sprintf( __( 'Attached to the %1$s hook, fired in %2$s on line %3$d.', 'log-deprecated' ), $hook, $in_file, $on_line );
 		} elseif ( ! empty( $menu ) ) {
-			$excerpt = __( 'An admin menu page is using user levels instead of capabilities. There is likely a related log item with specifics.' );
+			$excerpt = __( 'An admin menu page is using user levels instead of capabilities. There is likely a related log item with specifics.', 'log-deprecated' );
 		} elseif ( ! empty( $on_line ) ) {
-			$excerpt = sprintf( __( 'Used in %1$s on line %2$d.' ), $in_file, $on_line );
+			$excerpt = sprintf( __( 'Used in %1$s on line %2$d.', 'log-deprecated' ), $in_file, $on_line );
 		} elseif ( ! empty( $in_file ) ) {
-			$excerpt = sprintf( __( 'Used in %1$s.' ), $in_file );
+			// translators: %s is file name.
+			$excerpt = sprintf( __( 'Used in %s.', 'log-deprecated' ), $in_file );
 		} else {
 			$excerpt = '';
 		}
@@ -235,7 +244,7 @@ class Nacin_Deprecated {
 				$post = get_post( $post_id );
 				echo '<strong>' . esc_html( $post->post_title ) . '</strong>';
 				echo '<br/>' . esc_html( $post->post_excerpt );
-				echo '<div class="row-actions"><span class="delete"><a class="submitdelete" title="' . esc_attr( __('Delete') ) . '" href="' . get_delete_post_link( $post_id, '', true ) . '">' . __( 'Delete' ) . '</a></span></div>';
+				echo '<div class="row-actions"><span class="delete"><a class="submitdelete" title="' . esc_attr__( 'Delete' ) . '" href="' . get_delete_post_link( $post_id, '', true ) . '">' . __( 'Delete' ) . '</a></span></div>';
 				break;
 			case 'deprecated_count' :
 				$post = get_post( $post_id );
@@ -265,12 +274,13 @@ class Nacin_Deprecated {
 	function filter_manage_post_type_posts_columns( $cols ) {
 		$cols = array(
 			'cb' => '<input type="checkbox" />',
-			'deprecated_title' => __('Deprecated Call'),
-		//	'deprecated_version' => __('Version'),
-			'deprecated_alternative' => __('Alternative'),
-			'deprecated_count' => __('Count'),
-			'deprecated_modified' => __('Last Used'),
+			'deprecated_title'       => __( 'Deprecated Call', 'log-deprecated' ),
+			'deprecated_version'     => __( 'Version',         'log-deprecated' ),
+			'deprecated_alternative' => __( 'Alternative',     'log-deprecated' ),
+			'deprecated_count'       => __( 'Count',           'log-deprecated' ),
+			'deprecated_modified'    => __( 'Last Used',       'log-deprecated' ),
 		);
+		unset( $cols['deprecated_version'] ); // Get it translated.
 		return $cols;
 	}
 
@@ -286,6 +296,7 @@ class Nacin_Deprecated {
 		$GLOBALS['user_posts'] = false;
 
 		// Hides Add New button, bulk actions, sets some column widths, uses the plugins screen icon.
+		// @todo Should probably actually disable new posts.
 	?>
 <style type="text/css">
 .add-new-h2, .view-switch, .subsubsub,
@@ -308,7 +319,7 @@ body.no-js .tablenav select[name^=action], body.no-js #doaction, body.no-js #doa
 jQuery(document).ready( function($) {
 	var s = $('div.actions select[name^=action]');
 	s.find('option[value=trash], option[value=edit]').remove();
-	s.append('<option value="delete"><?php echo addslashes( __('Delete') ); ?></option>');
+	s.append('<option value="delete"><?php echo addslashes( __( 'Delete' ) ); ?></option>');
 });
 //]]>
 </script>
@@ -331,7 +342,7 @@ jQuery(document).ready( function($) {
 		if ( 'Empty Trash' == $text ) {
 			remove_filter( 'gettext', array( &$this, 'filter_gettext_empty_trash' ), 10, 2 );
 			$GLOBALS['is_trash'] = false;
-			return __( 'Clear Log' );
+			return __( 'Clear Log', 'log-deprecated' );
 		}
 		return $translation;
 	}
@@ -359,7 +370,7 @@ jQuery(document).ready( function($) {
 	function action_admin_menu() {
 		global $menu, $submenu;
 		unset( $menu[2048] );
-		add_submenu_page( 'tools.php', __( 'Deprecated Calls' ), __( 'Deprecated Calls' ), 'activate_plugins', 'edit.php?post_type=' . $this->pt );
+		add_submenu_page( 'tools.php', __( 'Deprecated Calls', 'log-deprecated' ), __( 'Deprecated Calls', 'log-deprecated' ), 'activate_plugins', 'edit.php?post_type=' . $this->pt );
 	}
 
 	/**
@@ -368,11 +379,11 @@ jQuery(document).ready( function($) {
 	function action_init() {
 		register_post_type( $this->pt, array(
 			'labels' => array(
-				'name' => __( 'Deprecated Calls' ),
-				'singular_name' => __( 'Deprecated Call' ),
+				'name' => __( 'Deprecated Calls', 'log-deprecated' ),
+				'singular_name' => __( 'Deprecated Call', 'log-deprecated' ),
 				// add_new, add_new_item, edit_item, new_item, view_item, not_found_in_trash
-				'search_items' => __( 'Search Logs' ),
-				'not_found' => __( 'Nothing in the log! Your plugins are oh so fine.' ),
+				'search_items' => __( 'Search Logs', 'log-deprecated' ),
+				'not_found' => __( 'Nothing in the log! Your plugins are oh so fine.', 'log-deprecated' ),
 			),
 			'menu_position' => 2048, // cheap hack so I know exactly where it is (hopefully).
 			'show_ui' => true,

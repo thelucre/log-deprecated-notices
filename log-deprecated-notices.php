@@ -38,10 +38,14 @@ class Nacin_Deprecated {
 		if ( ! function_exists( '__return_false' ) )
 			return;
 
+		register_activation_hook( __FILE__, array( 'Nacin_Deprecated', 'on_activation' ) );
+
 		add_action( 'init', array( &$this, 'action_init' ) );
 
-		foreach ( array( 'function', 'file', 'argument' ) as $item )
-			add_action( "deprecated_{$item}_trigger_error", '__return_false' );
+		if ( WP_DEBUG ) {
+			foreach ( array( 'function', 'file', 'argument' ) as $item )
+				add_action( "deprecated_{$item}_trigger_error", '__return_false' );
+		}
 
 		add_action( 'deprecated_function_run',  array( &$this, 'log_function' ), 10, 3 );
 		add_action( 'deprecated_file_included', array( &$this, 'log_file'     ), 10, 4 );
@@ -354,4 +358,3 @@ class Nacin_Deprecated {
 }
 /** Initialize. */
 $GLOBALS['nacin_deprecated'] = new Nacin_Deprecated;
-register_activation_hook( __FILE__, array( 'Nacin_Deprecated', 'on_activation' ) );

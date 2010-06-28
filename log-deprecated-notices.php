@@ -262,7 +262,7 @@ class Nacin_Deprecated {
 	 */
 	function filter_manage_post_type_posts_columns( $cols ) {
 		$cols = array(
-			'cb' => '',
+			'cb' => '<input type="checkbox" />',
 			'deprecated_title' => __('Deprecated Call'),
 		//	'deprecated_version' => __('Version'),
 			'deprecated_alternative' => __('Alternative'),

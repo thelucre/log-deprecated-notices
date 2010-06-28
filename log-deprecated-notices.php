@@ -58,6 +58,8 @@ class Nacin_Deprecated {
 		add_action( 'admin_print_styles',               array( &$this, 'action_admin_print_styles' ), 20 );
 		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
 		add_filter( "manage_{$this->pt}_posts_columns", array( &$this, 'filter_manage_post_type_posts_columns' ) );
+		add_action( 'restrict_manage_posts',            array( &$this, 'action_restrict_manage_posts' ) );
+		add_action( 'load-edit.php',                    array( &$this, 'action_load_edit_php' ) );
 	}
 
 	/**
@@ -156,11 +158,6 @@ class Nacin_Deprecated {
 		static $existing = null;
 		if ( is_null( $existing ) )
 			$existing = (array) $wpdb->get_results( $wpdb->prepare( "SELECT post_name, ID FROM $wpdb->posts WHERE post_type = %s", $this->pt ), OBJECT_K );
-
-		if ( ! array_key_exists( 'replacement', $args ) )
-			$args['replacement'] = '';
-		if ( ! array_key_exists( 'message', $args ) )
-			$args['message'] = '';
 
 		extract( $args );
 
@@ -261,7 +258,6 @@ class Nacin_Deprecated {
 	 *
 	 * @todo Is a separate version column desirable?
 	 * @todo Checkbox for bulk deletes. Would need JS to remove bulk edit.
-	 * @todo Clear Logs button.
 	 * @todo Filter on type (file/function/argument), filter on specific function etc.
 	 */
 	function filter_manage_post_type_posts_columns( $cols ) {
@@ -301,6 +297,38 @@ class Nacin_Deprecated {
 	}
 
 	/**
+	 * Cheap hack to show a 'Clear Log' button.
+	 * Somehow, there is not a decent hook anywhere on edit.php (but there is for edit-comments.php).
+	 */
+	function action_restrict_manage_posts() {
+		$GLOBALS['is_trash'] = true;
+		add_filter( 'gettext', array( &$this, 'filter_gettext_empty_trash' ), 10, 2 );
+	}
+
+	/**
+	 * Modifies 'Empty Trash' to 'Clear Log'.
+	 */
+	function filter_gettext_empty_trash( $translation, $text ) {
+		if ( 'Empty Trash' == $text ) {
+			remove_filter( 'gettext', array( &$this, 'filter_gettext_empty_trash' ), 10, 2 );
+			$GLOBALS['is_trash'] = false;
+			return __( 'Clear Log' );
+		}
+		return $translation;
+	}
+
+	/**
+	 * Cheap hack so 'Empty Trash' works.
+	 */
+	function action_load_edit_php() {
+		global $current_screen;
+		if ( 'edit-' . $this->pt != $current_screen->id )
+			return;
+		if ( isset( $_GET['delete_all'] ) || isset( $_GET['delete_all2'] ) )
+			$_GET['post_status'] = 'draft';
+	}
+
+	/**
 	 * Cheap hack to make my show_ui post type a submenu.
 	 *
 	 * Should hypothetically be forwards compatible.
@@ -329,7 +357,7 @@ class Nacin_Deprecated {
 			'capabilities' => array(
 				'edit_post'          => 'do_not_allow',
 				'edit_posts'         => 'activate_plugins',
-				'edit_others_posts'  => 'do_not_allow',
+				'edit_others_posts'  => 'activate_plugins',
 				'publish_posts'      => 'do_not_allow',
 				'read_post'          => 'activate_plugins',
 				'read_private_posts' => 'do_not_allow',

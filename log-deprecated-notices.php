@@ -84,7 +84,13 @@ class Nacin_Deprecated {
 	function log_argument( $function, $message, $version ) {
 		$backtrace = debug_backtrace();
 		$deprecated = $function . '()';
+		// @todo [core] Introduce _deprecated_message()
 		switch ( $backtrace[4]['function'] ) {
+			case 'has_cap' :
+				$in_file = $this->strip_abspath( $backtrace[6]['file'] );
+				$on_line = $backtrace[6]['line'];
+				$deprecated = 'current_user_can()';
+				break;
 			case 'get_plugin_data' :
 				$in_file = $this->strip_abspath( $backtrace[4]['args'][0] );
 				$on_line = 0;

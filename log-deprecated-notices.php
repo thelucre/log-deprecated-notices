@@ -244,7 +244,7 @@ class Nacin_Deprecated {
 				$post = get_post( $post_id );
 				echo '<strong>' . esc_html( $post->post_title ) . '</strong>';
 				echo '<br/>' . esc_html( $post->post_excerpt );
-				echo '<div class="row-actions"><span class="delete"><a class="submitdelete" title="' . esc_attr__( 'Delete' ) . '" href="' . get_delete_post_link( $post_id, '', true ) . '">' . __( 'Delete' ) . '</a></span></div>';
+				echo '<div class="row-actions"><span class="delete"><a class="submitdelete" title="' . esc_attr__( 'Delete', 'log-deprecated' ) . '" href="' . get_delete_post_link( $post_id, '', true ) . '">' . __( 'Delete', 'log-deprecated' ) . '</a></span></div>';
 				break;
 			case 'deprecated_count' :
 				$post = get_post( $post_id );
@@ -252,7 +252,7 @@ class Nacin_Deprecated {
 				echo number_format_i18n( $count );
 				break;
 			case 'deprecated_modified' :
-				echo get_the_date( __('Y/m/d g:i:s A' ) );
+				echo get_the_date( __('Y/m/d g:i:s A', 'log-deprecated' ) );
 				break;
 			case 'deprecated_version' :
 				$meta = get_post_meta( $post_id, '_nacin_deprecated_meta', true );
@@ -319,7 +319,7 @@ body.no-js .tablenav select[name^=action], body.no-js #doaction, body.no-js #doa
 jQuery(document).ready( function($) {
 	var s = $('div.actions select[name^=action]');
 	s.find('option[value=trash], option[value=edit]').remove();
-	s.append('<option value="delete"><?php echo addslashes( __( 'Delete' ) ); ?></option>');
+	s.append('<option value="delete"><?php echo addslashes( __( 'Delete', 'log-deprecated' ) ); ?></option>');
 });
 //]]>
 </script>
@@ -354,7 +354,7 @@ jQuery(document).ready( function($) {
 		global $current_screen;
 		if ( 'edit-' . $this->pt != $current_screen->id ) {
 			if ( $this->pt == $current_screen->id )
-				wp_die( __( 'Invalid post type.' ) );
+				wp_die( __( 'Invalid post type.', 'log-deprecated' ) );
 			return;	
 		}
 

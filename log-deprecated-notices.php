@@ -20,7 +20,6 @@
  * @todo Finish i18n'ing
  * @todo Menu bubble letting you know you have notices you haven't looked at yet.
  * @todo Plugin ID. Also, notice on plugins page next to said plugin.
- * @todo Known issue -- the backtrace needs to be inspected better (if it was attached to a hook, for example).
  */
 class Nacin_Deprecated {
 

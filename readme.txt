@@ -36,9 +36,11 @@ These are the various things on the @todo:
  * Finish internationalization.
  * Menu bubble letting you know you have notices you haven't looked at yet.
  * Plugin identification. Also, an unobstrusive notice on plugins page next to said plugin.
- * Bulk actions and the perhaps ability to auto-purge the log.
+ * Perhaps the ability to auto-purge the log.
  * Ability to filter on version number, type of functionality that is deprecated, file or plugin in which the deprecated functionality is used, etc.
  * Ability to mute a specific notice, such as one that is known.
  * Offer some kind of better multisite support.
 
 Want to add something here? I'm all ears. plugins at [andrewnacin.com](http://andrewnacin.com/) or @[nacin](http://twitter.com/nacin) on Twitter.
+
+I will prioritize these tasks based on feedback, so let me know what you'd like to see.

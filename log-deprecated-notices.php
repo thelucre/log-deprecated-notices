@@ -60,6 +60,7 @@ class Nacin_Deprecated {
 		add_filter( "manage_{$this->pt}_posts_columns", array( &$this, 'filter_manage_post_type_posts_columns' ) );
 		add_action( 'restrict_manage_posts',            array( &$this, 'action_restrict_manage_posts' ) );
 		add_action( 'load-edit.php',                    array( &$this, 'action_load_edit_php' ) );
+		add_action( 'admin_footer-edit.php',            array( &$this, 'action_admin_footer_edit_php' ) );
 	}
 
 	/**
@@ -144,7 +145,7 @@ class Nacin_Deprecated {
 	 * Strip ABSPATH from an absolute filepath. Also, Windows is lame.
 	 */
 	function strip_abspath( $path ) {
-		return ltrim( str_replace( array( untrailingslashit( ABSPATH, '/' ), '\\' ), array( '', '/' ), $path ), '/' );
+		return ltrim( str_replace( array( untrailingslashit( ABSPATH ), '\\' ), array( '', '/' ), $path ), '/' );
 	}
 
 	/**
@@ -257,12 +258,11 @@ class Nacin_Deprecated {
 	 * Attached to manage_{post_type}_posts_columns filter.
 	 *
 	 * @todo Is a separate version column desirable?
-	 * @todo Checkbox for bulk deletes. Would need JS to remove bulk edit.
 	 * @todo Filter on type (file/function/argument), filter on specific function etc.
 	 */
 	function filter_manage_post_type_posts_columns( $cols ) {
-		// @todo Can't use cb as it expects edit_post and doesn't check delete_post.
 		$cols = array(
+			'cb' => '',
 			'deprecated_title' => __('Deprecated Call'),
 		//	'deprecated_version' => __('Version'),
 			'deprecated_alternative' => __('Alternative'),
@@ -287,13 +287,31 @@ class Nacin_Deprecated {
 		// @todo Should probably actually disable new posts.
 	?>
 <style type="text/css">
-.add-new-h2, .view-switch, .subsubsub, .tablenav select[name^=action], #doaction, #doaction2 { display: none }
+.add-new-h2, .view-switch, .subsubsub,
+body.no-js .tablenav select[name^=action], body.no-js #doaction, body.no-js #doaction2 { display: none }
 .widefat .column-deprecated_modified, .widefat .column-deprecated_version { width: 10%; }
 .widefat .column-deprecated_count { width: 10%; text-align: right }
 .widefat .column-deprecated_cb { padding: 0; width: 2.2em }
 #icon-edit { background-position: -432px -5px; }
 </style>
 	<?php
+	}
+
+	function action_admin_footer_edit_php() {
+		global $current_screen;
+		if ( 'edit-' . $this->pt != $current_screen->id )
+			return;
+?>
+<script type="text/javascript"> 
+//<![CDATA[
+jQuery(document).ready( function($) {
+	var s = $('div.actions select[name^=action]');
+	s.find('option[value=trash], option[value=edit]').remove();
+	s.append('<option value="delete"><?php echo addslashes( __('Delete') ); ?></option>');
+});
+//]]>
+</script>
+<?php
 	}
 
 	/**
@@ -355,7 +373,7 @@ class Nacin_Deprecated {
 			'show_ui' => true,
 			'public' => false,
 			'capabilities' => array(
-				'edit_post'          => 'do_not_allow',
+				'edit_post'          => 'activate_plugins',
 				'edit_posts'         => 'activate_plugins',
 				'edit_others_posts'  => 'activate_plugins',
 				'publish_posts'      => 'do_not_allow',

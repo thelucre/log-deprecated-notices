@@ -17,15 +17,13 @@ Please report any bugs to (andrewnacin.com, plugins at), or find me in IRC #word
 
 This is beta software. It works, but there's a lot left on the todo. Have an idea? Let me know.
 
-This plugin is uninstallable. It will remove log entries on uninstall.
-
 == Installation ==
 
 1. Upload `log-deprecated-notices.php` to the `/wp-content/plugins/` directory
 2. Activate the plugin through the 'Plugins' menu in WordPress
 3. View the log in the 'Tools' menu, under 'Deprecated Calls'
 
-This plugin is uninstallable. It will remove log entries on uninstall.
+This plugin is will remove log entries when it is uninstalled and deleted.
 
 == Screenshots ==
 

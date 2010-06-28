@@ -305,7 +305,7 @@ class Nacin_Deprecated {
 	function action_admin_menu() {
 		global $menu, $submenu;
 		unset( $menu[2048] );
-		add_submenu_page( 'tools.php', __( 'Deprecated Calls' ), 'activate_plugins', 'edit.php?post_type=' . $this->pt );
+		add_submenu_page( 'tools.php', __( 'Deprecated Calls' ), __( 'Deprecated Calls' ), 'activate_plugins', 'edit.php?post_type=' . $this->pt );
 	}
 
 	/**

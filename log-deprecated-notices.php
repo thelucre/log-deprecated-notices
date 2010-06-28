@@ -187,8 +187,8 @@ class Nacin_Deprecated {
 		if ( ! empty( $replacement ) )
 			$content = sprintf( __( 'Use %s instead.' ), $replacement );
 		if ( ! empty( $message ) )
-			$content .= (string) $message;
-		if ( ! empty( $content ) )
+			$content .= ( strlen( $content ) ? ' ' : '' ) . (string) $message;
+		if ( empty( $content ) )
 			$content = __( 'No alternative available.' );
 		$content .= "\n" . sprintf( __( 'Deprecated in version %s.' ), $version );
 

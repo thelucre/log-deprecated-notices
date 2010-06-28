@@ -139,11 +139,10 @@ class Nacin_Deprecated {
 	}
 
 	/**
-	 * Strip ABSPATH from an absolute filepath.
+	 * Strip ABSPATH from an absolute filepath. Also, Windows is lame.
 	 */
 	function strip_abspath( $path ) {
-		$path = str_replace( '\\', '/', $path ); // Windows is lame.
-		return str_replace( ABSPATH, '', $path );
+		return ltrim( str_replace( array( untrailingslashit( ABSPATH, '/' ), '\\' ), array( '', '/' ), $path ), '/' );
 	}
 
 	/**

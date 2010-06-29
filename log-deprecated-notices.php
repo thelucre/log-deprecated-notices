@@ -6,7 +6,7 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.1-beta-6
+ * Version: 0.1-beta-7
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
@@ -28,7 +28,7 @@ class Deprecated_Log {
 	 *
 	 * @var int
 	 */
-	var $db_version = 2;
+	var $db_version = 3;
 
 	/**
 	 * Options.
@@ -98,6 +98,8 @@ class Deprecated_Log {
 		// Permissions handling, also make 'Clear Log' work.
 		foreach ( array( 'edit.php', 'post.php', 'post-new.php' ) as $item )
 			add_action( "load-{$item}",                 array( &$this, 'action_load_edit_php' ) );
+		// Handle special edit.php filters.
+		// add_filter( 'request',                          array( &$this, 'filter_request' ) );
 	}
 
 	/**
@@ -127,6 +129,15 @@ class Deprecated_Log {
 		}
 		if ( $current_db_version < 2 )
 			$wpdb->update( $wpdb->posts, array( 'post_status' => 'publish' ), array( 'post_type' => 'deprecated_log' ) );
+		if ( $current_db_version < 3 ) {
+			$meta_rows = $wpdb->get_results( "SELECT * FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_meta'" );
+			foreach ( $meta_rows as $meta_row ) {
+				$meta = maybe_unserialize( $meta_row->meta_value );
+				foreach ( array_keys( $meta ) as $key ) {
+					add_post_meta( $meta_row->post_id, '_deprecated_log_' . $key, $meta[ $key ], true );
+				}
+			}
+		}
 	}
 
 	/**
@@ -282,7 +293,10 @@ class Deprecated_Log {
 				'post_name'    => $post_name,
 			) );
 			// For safe keeping.
-			update_post_meta( $post_id, '_deprecated_log_meta', array_merge( array( 'type' => $type ), $args ) );
+			add_post_meta( $post_id, '_deprecated_log_meta', array_merge( array( 'type' => $type ), $args ) );
+			add_post_meta( $post_id, '_deprecated_log_type', $type, true );
+			foreach ( array_keys( $args ) as $meta_key )
+				add_post_meta( $post_id, '_deprecated_log_' . $key, $args[ $meta_key ], true );
 			$existing[ $post_name ] = $post_id;
 		} else {
 			$post_id = $existing[ $post_name ]->ID;
@@ -359,8 +373,7 @@ class Deprecated_Log {
 		// Hides Add New button, bulk actions, sets some column widths, uses the plugins screen icon.
 	?>
 <style type="text/css">
-.add-new-h2, .view-switch, /* .subsubsub, */
-body.no-js .tablenav select[name^=action], body.no-js #doaction, body.no-js #doaction2 { display: none }
+.add-new-h2, .view-switch, body.no-js .tablenav select[name^=action], body.no-js #doaction, body.no-js #doaction2 { display: none }
 .widefat .column-deprecated_modified, .widefat .column-deprecated_version { width: 10%; }
 .widefat .column-deprecated_count { width: 10%; text-align: right }
 .widefat .column-deprecated_cb { padding: 0; width: 2.2em }
@@ -396,10 +409,70 @@ jQuery(document).ready( function($) {
 	 * Somehow, there is not a decent hook anywhere on edit.php (but there is for edit-comments.php).
 	 */
 	function action_restrict_manage_posts() {
+		global $wpdb;
 		$this->_is_trash = $GLOBALS['is_trash'];
 		$GLOBALS['is_trash'] = true;
 		add_filter( 'gettext', array( &$this, 'filter_gettext_empty_trash' ), 10, 2 );
+
+/*		$files = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_in_file'" );
+		if ( $files ) {
+			echo '<select name="deprecated_file">';
+			echo '<option value="">' . esc_html__( 'Show all files', 'log-deprecated' ) . '</option>';
+			foreach ( array_filter( $files ) as $file ) {
+				$selected = '';
+				if ( ! empty( $_GET['deprecated_file'] ) )
+					$selected = selected( stripslashes( $_GET['deprecated_file'] ), $file, false );
+				echo '<option' . $selected . ' value="' . esc_attr( $file ) . '">' . esc_html( $file ) . '</option>';
+			}
+			echo '</select>';
+		}
+		$types = array(
+			''              => __( 'Show all types', 'log-deprecated' ),
+			'constant'      => __( 'Constant',       'log-deprecated' ),
+			'function'      => __( 'Function',       'log-deprecated' ),
+			'argument'      => __( 'Argument',       'log-deprecated' ),
+			'functionality' => __( 'Functionality',  'log-deprecated' ),
+			'file'          => __( 'File',           'log-deprecated' ),
+		);
+		echo '<select name="deprecated_type">';
+		foreach ( $types as $val => $type ) {
+			$selected = ! empty( $_GET['deprecated_type'] ) ? selected( $_GET['deprecated_type'], $val, false ) : '';
+			echo '<option' . $selected . ' value="' . esc_attr( $val ) . '">' . esc_html( $type ) . '</option>';
+		}
+		echo '</select>';
 	}
+
+	function filter_request( $qv ) {
+		$pairs = array();
+		if ( ! empty( $_GET['deprecated_file'] ) )
+			$pairs[] = array( '_deprecated_log_in_file', stripslashes( $_GET['deprecated_file'] ) );
+		if ( ! empty( $_GET['deprecated_type'] ) )
+			$pairs[] = array( '_deprecated_log_type', $_GET['deprecated_type'] );
+		if ( ! empty( $pairs ) ) {
+			$pair = array_shift( $pairs );
+			list( $qv['meta_key'], $qv['meta_value'] ) = $pair;
+			if ( ! empty( $pairs ) ) {
+				add_filter( 'posts_where', array( &$this, 'filter_posts_where' ), 10, 2 );
+				add_filter( 'posts_join',  array( &$this, 'filter_posts_join'  ), 10, 2 );
+				$this->_additional_filters = $pairs;
+			}
+		}
+		return $qv;
+	}
+
+	function filter_posts_where( $where, $object ) {
+		global $wpdb;
+		foreach ( $this->_additional_filters as $pair )
+			$where .= $wpdb->prepare(" AND postmeta{$pair[0]}.meta_key = %s AND $wpdb->postmeta.meta_value = %s ", $pair[0], $pair[1] );
+		return $where;
+	}
+
+	function filter_posts_join( $join, $object ) {
+		global $wpdb;
+		foreach ( $this->_additional_filters as $pair )
+			$join .= " LEFT JOIN $wpdb->postmeta AS postmeta{$pair[0]} ON ($wpdb->posts.ID = postmeta{$pair[0]}.post_id) ";
+		return $join;
+*/	}
 
 	/**
 	 * Modifies 'Empty Trash' to 'Clear Log'.
@@ -537,6 +610,7 @@ jQuery(document).ready( function($) {
 	function on_uninstall() {
 		global $wpdb;
 		$wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'deprecated_log'" );
+		$wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key LIKE '_deprecated_log_%'" );
 		delete_option( $this->option_name );
 	}
 }

@@ -33,9 +33,7 @@ This plugin is will remove log entries when it is uninstalled and deleted.
 
 These are the various things on the @todo:
 
- * Finish internationalization.
- * Menu bubble letting you know you have notices you haven't looked at yet.
- * Plugin identification. Also, an unobstrusive notice on plugins page next to said plugin.
+ * Plugin identification. Also, an unobstrusive note on plugins page next to said plugins.
  * Perhaps the ability to auto-purge the log.
  * Ability to filter on version number, type of functionality that is deprecated, file or plugin in which the deprecated functionality is used, etc.
  * Ability to mute a specific notice, such as one that is known.

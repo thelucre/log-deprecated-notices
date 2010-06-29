@@ -559,7 +559,7 @@ jQuery(document).ready( function($) {
 	 * Should hypothetically be forwards compatible.
 	 */
 	function action_admin_menu() {
-		global $menu, $submenu, $typenow, $wpdb;
+		global $menu, $typenow, $wpdb;
 		unset( $menu[2048] );
 
 		$page_title = $label = __( 'Deprecated Calls', 'log-deprecated' );
@@ -576,7 +576,7 @@ jQuery(document).ready( function($) {
 	 * Registers the custom post type.
 	 */
 	function action_init() {
-		register_post_type( $this->pt, array(
+		$args = array(
 			'labels' => array(
 				'name' => __( 'Deprecated Calls', 'log-deprecated' ),
 				'singular_name' => __( 'Deprecated Call', 'log-deprecated' ),
@@ -599,7 +599,8 @@ jQuery(document).ready( function($) {
 			),
 			'rewrite'      => false,
 			'query_var'    => false,
-		) );
+		);
+		register_post_type( $this->pt, $args );
 	}
 
 	/**
@@ -622,4 +623,4 @@ jQuery(document).ready( function($) {
 /** Initialize. */
 $GLOBALS['deprecated_log_instance'] = new Deprecated_Log;
 
-endif; 
+endif;s

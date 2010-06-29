@@ -6,7 +6,7 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.1-beta-7
+ * Version: 0.1-beta-8
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
@@ -98,8 +98,6 @@ class Deprecated_Log {
 		// Permissions handling, also make 'Clear Log' work.
 		foreach ( array( 'edit.php', 'post.php', 'post-new.php' ) as $item )
 			add_action( "load-{$item}",                 array( &$this, 'action_load_edit_php' ) );
-
-		return; // @disable
 
 		// Handle special edit.php filters.
 		add_filter( 'request',                          array( &$this, 'filter_request' ) );
@@ -417,6 +415,22 @@ jQuery(document).ready( function($) {
 		$GLOBALS['is_trash'] = true;
 		add_filter( 'gettext', array( &$this, 'filter_gettext_empty_trash' ), 10, 2 );
 
+		$types = array(
+			'constant'      => __( 'Constant',       'log-deprecated' ),
+			'function'      => __( 'Function',       'log-deprecated' ),
+			'argument'      => __( 'Argument',       'log-deprecated' ),
+			'functionality' => __( 'Functionality',  'log-deprecated' ),
+			'file'          => __( 'File',           'log-deprecated' ),
+		);
+		$types_used = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_type'" );
+		echo '<select name="deprecated_type">';
+		echo '<option value="">' . esc_html__( 'Show all types', 'log-deprecated' ) . '</option>';
+		foreach ( $types_used as $type ) {
+			$selected = ! empty( $_GET['deprecated_type'] ) ? selected( $_GET['deprecated_type'], $type, false ) : '';
+			echo '<option' . $selected . ' value="' . esc_attr( $type ) . '">' . esc_html( $types[ $type ] ) . '</option>';
+		}
+		echo '</select> ';
+
 		return; // @disable
 
 		$files = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_in_file'" );
@@ -431,20 +445,6 @@ jQuery(document).ready( function($) {
 			}
 			echo '</select>';
 		}
-		$types = array(
-			''              => __( 'Show all types', 'log-deprecated' ),
-			'constant'      => __( 'Constant',       'log-deprecated' ),
-			'function'      => __( 'Function',       'log-deprecated' ),
-			'argument'      => __( 'Argument',       'log-deprecated' ),
-			'functionality' => __( 'Functionality',  'log-deprecated' ),
-			'file'          => __( 'File',           'log-deprecated' ),
-		);
-		echo '<select name="deprecated_type">';
-		foreach ( $types as $val => $type ) {
-			$selected = ! empty( $_GET['deprecated_type'] ) ? selected( $_GET['deprecated_type'], $val, false ) : '';
-			echo '<option' . $selected . ' value="' . esc_attr( $val ) . '">' . esc_html( $type ) . '</option>';
-		}
-		echo '</select>';
 	}
 
 	function filter_request( $qv ) {
@@ -623,4 +623,4 @@ jQuery(document).ready( function($) {
 /** Initialize. */
 $GLOBALS['deprecated_log_instance'] = new Deprecated_Log;
 
-endif;s
+endif;

@@ -6,7 +6,7 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.1-beta-5
+ * Version: 0.1-beta-6
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
@@ -19,7 +19,6 @@ if ( ! class_exists( 'Deprecated_Log' ) ) :
  *
  * @package Deprecated_Log
  *
- * @todo Menu bubble letting you know you have notices you haven't looked at yet.
  * @todo Plugin ID. Also, notice on plugins page next to said plugin.
  */
 class Deprecated_Log {
@@ -29,7 +28,7 @@ class Deprecated_Log {
 	 *
 	 * @var int
 	 */
-	var $db_version = 1;
+	var $db_version = 2;
 
 	/**
 	 * Options.
@@ -126,6 +125,8 @@ class Deprecated_Log {
 			$wpdb->update( $wpdb->postmeta, array( 'meta_key' => '_deprecated_log_meta' ), array( 'meta_key' => '_nacin_deprecated_meta' ) );
 			$this->options['last_viewed'] = current_time( 'mysql' );
 		}
+		if ( $current_db_version < 2 )
+			$wpdb->update( $wpdb->posts, array( 'post_status' => 'publish' ), array( 'post_type' => 'deprecated_log' ) );
 	}
 
 	/**
@@ -275,6 +276,7 @@ class Deprecated_Log {
 				'post_date'    => current_time( 'mysql' ),
 				'post_excerpt' => $excerpt,
 				'post_type'    => $this->pt,
+				'post_status'  => 'publish',
 				'post_title'   => $deprecated,
 				'post_content' => $content . "\n<!--more-->\n" . $excerpt, // searches
 				'post_name'    => $post_name,
@@ -298,9 +300,15 @@ class Deprecated_Log {
 				// We just want a 'Delete' link. Trash here is excessive.
 				// @todo [core] Custom post types should be able to disable trash.
 				$post = get_post( $post_id );
+				$post_type_object = get_post_type_object( $post->post_type );
 				echo '<strong>' . esc_html( $post->post_title ) . '</strong>';
 				echo '<br/>' . esc_html( $post->post_excerpt );
-				echo '<div class="row-actions"><span class="delete"><a class="submitdelete" title="' . esc_attr__( 'Delete', 'log-deprecated' ) . '" href="' . get_delete_post_link( $post_id, '', true ) . '">' . __( 'Delete', 'log-deprecated' ) . '</a></span></div>';
+				echo '<div class="row-actions">';
+				if ( $GLOBALS['is_trash'] )
+					echo "<span class='untrash'><a title='" . esc_attr__( 'Unmute', 'log-deprecated' ) . "' href='" . wp_nonce_url( admin_url( sprintf( $post_type_object->_edit_link . '&amp;action=untrash', $post_id ) ), 'untrash-' . $post->post_type . '_' . $post_id ) . "'>" . __( 'Unmute', 'log-deprecated' ) . '</a></span> | ';
+				else
+					echo "<span class='mute'><a class='submitdelete' title='" . esc_attr__( 'Mute', 'log-deprecated' ) . "' href='" . get_delete_post_link($post->ID) . "'>" . __( 'Mute', 'log-deprecated' ) . '</a></span> | ';
+				echo '<span class="delete"><a class="submitdelete" title="' . esc_attr__( 'Delete', 'log-deprecated' ) . '" href="' . get_delete_post_link( $post_id, '', true ) . '">' . __( 'Delete', 'log-deprecated' ) . '</a></span></div>';
 				break;
 			case 'deprecated_count' :
 				$post = get_post( $post_id );
@@ -351,7 +359,7 @@ class Deprecated_Log {
 		// Hides Add New button, bulk actions, sets some column widths, uses the plugins screen icon.
 	?>
 <style type="text/css">
-.add-new-h2, .view-switch, .subsubsub,
+.add-new-h2, .view-switch, /* .subsubsub, */
 body.no-js .tablenav select[name^=action], body.no-js #doaction, body.no-js #doaction2 { display: none }
 .widefat .column-deprecated_modified, .widefat .column-deprecated_version { width: 10%; }
 .widefat .column-deprecated_count { width: 10%; text-align: right }
@@ -369,11 +377,13 @@ body.no-js .tablenav select[name^=action], body.no-js #doaction, body.no-js #doa
 		if ( 'edit-' . $this->pt != $current_screen->id )
 			return;
 ?>
-<script type="text/javascript"> 
+<script type="text/javascript">
 //<![CDATA[
 jQuery(document).ready( function($) {
 	var s = $('div.actions select[name^=action]');
-	s.find('option[value=trash], option[value=edit]').remove();
+	s.find('option[value=edit], option[value=delete]').remove();
+	s.find('option[value=trash]').text('<?php echo addslashes( __( 'Mute', 'log-deprecated' ) ); ?>');
+	s.find('option[value=untrash]').text('<?php echo addslashes( __( 'Unmute', 'log-deprecated' ) ); ?>');
 	s.append('<option value="delete"><?php echo addslashes( __( 'Delete', 'log-deprecated' ) ); ?></option>');
 });
 //]]>
@@ -386,6 +396,7 @@ jQuery(document).ready( function($) {
 	 * Somehow, there is not a decent hook anywhere on edit.php (but there is for edit-comments.php).
 	 */
 	function action_restrict_manage_posts() {
+		$this->_is_trash = $GLOBALS['is_trash'];
 		$GLOBALS['is_trash'] = true;
 		add_filter( 'gettext', array( &$this, 'filter_gettext_empty_trash' ), 10, 2 );
 	}
@@ -396,27 +407,72 @@ jQuery(document).ready( function($) {
 	function filter_gettext_empty_trash( $translation, $text ) {
 		if ( 'Empty Trash' == $text ) {
 			remove_filter( 'gettext', array( &$this, 'filter_gettext_empty_trash' ), 10, 2 );
-			$GLOBALS['is_trash'] = false;
+			$GLOBALS['is_trash'] = $this->_is_trash;
 			return __( 'Clear Log', 'log-deprecated' );
 		}
 		return $translation;
 	}
 
+	function filter_ngettext( $translation, $single, $plural, $number ) {
+		switch ( $single ) {
+			case 'All <span class="count">(%s)</span>' :
+				return _n( 'Log <span class="count">(%s)</span>', 'Log <span class="count">(%s)</span>', $number, 'log-deprecated' );
+			case 'Trash <span class="count">(%s)</span>' :
+				return _n( 'Muted <span class="count">(%s)</span>', 'Muted <span class="count">(%s)</span>', $number, 'log-deprecated' );
+			case 'Item moved to the trash.' : // 3.0
+			case 'Item moved to the Trash.' : // 3.1
+				return _n( 'Entry muted.', 'Entries muted.', $number, 'log-deprecated' );
+			case 'Item permanently deleted.' :
+				return _n( 'Entry deleted.', 'Entries deleted.', $number, 'log-deprecated' );
+			case 'Item restored from the Trash.' :
+				return _n ( 'Entry unmuted.', 'Entries unmuted.', $number, 'log-deprecated' );
+		}
+		return $translation;
+	}
+
 	/**
-	 * Cheap hack so 'Empty Trash' works. Also, janky permissions.
+	 * Cheap hacks when we're in the post type UI.
+	 *
+	 * First, it locks out post.php and post-new.php, since our permissions
+	 * don't cover that.
+	 *
+	 * Then it gets our 'Clear Log' button to work on the 'All' page, as it
+	 * uses the 'Empty Trash' functionality and requires a post status to work
+	 * off of, not the 'all' status.
+	 *
+	 * We're using 'All' because we can't remove that, but by directly modifying
+	 * the show_in_admin_status_list property of the publish post status (also in
+	 * this function), we can hide that one.
+	 *
+	 * This function also sets the last_viewed option, for the unread menu bubble.
+	 *
+	 * This function adds a filter to _n() and _nx() to change the text of status links.
+	 *
+	 * @todo [core] Filter on $status_links in edit.php
+	 * @todo [core] Custom post stati should have granular properties per post type.
 	 */
 	function action_load_edit_php() {
 		global $current_screen;
 		if ( 'edit-' . $this->pt != $current_screen->id ) {
 			if ( $this->pt == $current_screen->id )
 				wp_die( __( 'Invalid post type.', 'log-deprecated' ) );
-			return;	
+			return;
 		}
 
-		if ( isset( $_GET['delete_all'] ) || isset( $_GET['delete_all2'] ) )
-			$_GET['post_status'] = 'draft';
+		if ( ( empty( $_GET['post_status'] ) || 'all' == $_GET['post_status'] )
+			&& ( isset( $_GET['delete_all'] ) || isset( $_GET['delete_all2'] ) )
+		)
+			$_GET['post_status'] = 'publish';
+
 		$this->options['last_viewed'] = current_time('mysql');
 		update_option( $this->option_name, $this->options );
+
+		global $wp_post_statuses;
+		// You know where this is going.
+		$wp_post_statuses['publish']->show_in_admin_status_list = false;
+
+		foreach ( array( 'ngettext', 'ngettext_with_context' ) as $filter )
+			add_filter( $filter, array( &$this, 'filter_ngettext' ), 10, 4 );
 	}
 
 	/**
@@ -427,13 +483,14 @@ jQuery(document).ready( function($) {
 	function action_admin_menu() {
 		global $menu, $submenu, $typenow, $wpdb;
 		unset( $menu[2048] );
+
 		$page_title = $label = __( 'Deprecated Calls', 'log-deprecated' );
 		if ( $this->pt != $typenow && $this->options && ! empty( $this->options['last_viewed'] ) ) {
-			$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_type = %s AND post_date > %s", $this->pt, $this->options['last_viewed'] ) );
+			$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_type = %s AND post_date > %s AND post_status = %s", $this->pt, $this->options['last_viewed'], 'publish' ) );
 			if ( $count )
 				$label = sprintf( __( 'Deprecated Calls %s', 'log-deprecated' ), "<span class='update-plugins count-$count'><span class='update-count'>" . number_format_i18n( $count ) . '</span></span>' );
 		}
-	
+
 		add_submenu_page( 'tools.php', $page_title, $label, 'activate_plugins', 'edit.php?post_type=' . $this->pt );
 	}
 
@@ -445,9 +502,10 @@ jQuery(document).ready( function($) {
 			'labels' => array(
 				'name' => __( 'Deprecated Calls', 'log-deprecated' ),
 				'singular_name' => __( 'Deprecated Call', 'log-deprecated' ),
-				// add_new, add_new_item, edit_item, new_item, view_item, not_found_in_trash
+				// add_new, add_new_item, edit_item, new_item, view_item
 				'search_items' => __( 'Search Logs', 'log-deprecated' ),
 				'not_found' => __( 'Nothing in the log! Your plugins are oh so fine.', 'log-deprecated' ),
+				'not_found_in_trash' => __( 'Nothing muted.', 'log-deprecated' ),
 			),
 			'menu_position' => 2048, // cheap hack so I know exactly where it is (hopefully).
 			'show_ui' => true,
@@ -479,6 +537,7 @@ jQuery(document).ready( function($) {
 	function on_uninstall() {
 		global $wpdb;
 		$wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'deprecated_log'" );
+		delete_option( $this->option_name );
 	}
 }
 /** Initialize. */

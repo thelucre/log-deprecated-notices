@@ -98,8 +98,11 @@ class Deprecated_Log {
 		// Permissions handling, also make 'Clear Log' work.
 		foreach ( array( 'edit.php', 'post.php', 'post-new.php' ) as $item )
 			add_action( "load-{$item}",                 array( &$this, 'action_load_edit_php' ) );
+
+		return; // @disable
+
 		// Handle special edit.php filters.
-		// add_filter( 'request',                          array( &$this, 'filter_request' ) );
+		add_filter( 'request',                          array( &$this, 'filter_request' ) );
 	}
 
 	/**
@@ -414,7 +417,9 @@ jQuery(document).ready( function($) {
 		$GLOBALS['is_trash'] = true;
 		add_filter( 'gettext', array( &$this, 'filter_gettext_empty_trash' ), 10, 2 );
 
-/*		$files = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_in_file'" );
+		return; // @disable
+
+		$files = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_in_file'" );
 		if ( $files ) {
 			echo '<select name="deprecated_file">';
 			echo '<option value="">' . esc_html__( 'Show all files', 'log-deprecated' ) . '</option>';
@@ -472,7 +477,7 @@ jQuery(document).ready( function($) {
 		foreach ( $this->_additional_filters as $pair )
 			$join .= " LEFT JOIN $wpdb->postmeta AS postmeta{$pair[0]} ON ($wpdb->posts.ID = postmeta{$pair[0]}.post_id) ";
 		return $join;
-*/	}
+	}
 
 	/**
 	 * Modifies 'Empty Trash' to 'Clear Log'.
@@ -617,4 +622,4 @@ jQuery(document).ready( function($) {
 /** Initialize. */
 $GLOBALS['deprecated_log_instance'] = new Deprecated_Log;
 
-endif;
+endif; 

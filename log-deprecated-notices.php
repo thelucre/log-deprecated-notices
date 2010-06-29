@@ -1,51 +1,78 @@
 <?php
 /**
- * @package Nacin_Deprecated
+ * @package Deprecated_Log
  */
 /*
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.1-beta-4
+ * Version: 0.1-beta-5
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
  */
 
+if ( ! class_exists( 'Deprecated_Log' ) ) :
+
 /**
  * Base class.
  *
- * @package Nacin_Deprecated
+ * @package Deprecated_Log
  *
  * @todo Menu bubble letting you know you have notices you haven't looked at yet.
  * @todo Plugin ID. Also, notice on plugins page next to said plugin.
  */
-class Nacin_Deprecated {
+class Deprecated_Log {
+
+	/**
+	 * DB version.
+	 *
+	 * @var int
+	 */
+	var $db_version = 1;
+
+	/**
+	 * Options.
+	 *
+	 * @var array
+	 */
+	var $options = array();
+
+	/**
+	 * Option name in DB.
+	 *
+	 * @var string
+	 */
+	var $option_name = 'log_deprecated_notices';
 
 	/**
 	 * Custom post type.
 	 *
 	 * @var string
 	 */
-	var $pt = 'nacin_deprecated';
+	var $pt = 'deprecated_log';
 
 	/**
 	 * Constructor. Adds hooks.
 	 */
-	function Nacin_Deprecated() {
+	function Deprecated_Log() {
 		// Bail without 3.0.
 		if ( ! function_exists( '__return_false' ) )
 			return;
 
-		register_activation_hook( __FILE__, array( 'Nacin_Deprecated', 'on_activation' ) );
+		// Registers the uninstall hook.
+		register_activation_hook( __FILE__, array( 'Deprecated_Log', 'on_activation' ) );
 
+		// Registers post type.
 		add_action( 'init', array( &$this, 'action_init' ) );
 
+		// Silence E_NOTICE for deprecated usage.
 		if ( WP_DEBUG ) {
 			foreach ( array( 'function', 'file', 'argument' ) as $item )
 				add_action( "deprecated_{$item}_trigger_error", '__return_false' );
 		}
 
+		// Log deprecated notices.
 		add_action( 'deprecated_function_run',  array( &$this, 'log_function' ), 10, 3 );
 		add_action( 'deprecated_file_included', array( &$this, 'log_file'     ), 10, 4 );
 		add_action( 'deprecated_argument_run',  array( &$this, 'log_argument' ), 10, 4 );
@@ -53,23 +80,52 @@ class Nacin_Deprecated {
 		if ( ! is_admin() )
 			return;
 
-		add_action( 'admin_init',                       array( &$this, 'action_admin_init' ) );
-		add_action( 'admin_menu',                       array( &$this, 'action_admin_menu' ) );
-		add_action( 'admin_print_styles',               array( &$this, 'action_admin_print_styles' ), 20 );
-		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
-		add_filter( "manage_{$this->pt}_posts_columns", array( &$this, 'filter_manage_post_type_posts_columns' ) );
-		add_action( 'restrict_manage_posts',            array( &$this, 'action_restrict_manage_posts' ) );
-		add_action( 'admin_footer-edit.php',            array( &$this, 'action_admin_footer_edit_php' ) );
+		$this->options = get_option( $this->option_name );
 
+		// Textdomain and upgrade routine.
+		add_action( 'admin_init',                       array( &$this, 'action_admin_init' ) );
+		// Move post type menu to submenu.
+		add_action( 'admin_menu',                       array( &$this, 'action_admin_menu' ) );
+		// Basic CSS.
+		add_action( 'admin_print_styles',               array( &$this, 'action_admin_print_styles' ), 20 );
+		// Column handling.
+		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
+		// Column headers.
+		add_filter( "manage_{$this->pt}_posts_columns", array( &$this, 'filter_manage_post_type_posts_columns' ) );
+		// Filters and 'Clear Log'.
+		add_action( 'restrict_manage_posts',            array( &$this, 'action_restrict_manage_posts' ) );
+		// Basic JS (changes Bulk Actions options).
+		add_action( 'admin_footer-edit.php',            array( &$this, 'action_admin_footer_edit_php' ) );
+		// Permissions handling, also make 'Clear Log' work.
 		foreach ( array( 'edit.php', 'post.php', 'post-new.php' ) as $item )
 			add_action( "load-{$item}",                 array( &$this, 'action_load_edit_php' ) );
 	}
 
 	/**
-	 * Attached to admin_init. Loads the textdomain.
+	 * Attached to admin_init. Loads the textdomain and the upgrade routine.
 	 */
 	function action_admin_init() {
+		if ( false === $this->options || ! isset( $this->options['db_version'] ) || $this->options['db_version'] < $this->db_version ) {
+			if ( ! is_array( $this->options ) )
+				$this->options = array();
+			$current_db_version = isset( $this->options['db_version'] ) ? $this->options['db_version'] : 0;
+			$this->upgrade( $current_db_version );
+			$this->options['db_version'] = $this->db_version;
+			update_option( $this->option_name, $this->options );
+		}
 		load_plugin_textdomain('log-deprecated', null, dirname( plugin_basename( __FILE__ ) ) . '/languages/' );
+	}
+
+	/**
+	 * Upgrade routine.
+	 */
+	function upgrade( $current_db_version ) {
+		global $wpdb;
+		if ( $current_db_version < 1 ) {
+			$wpdb->update( $wpdb->posts, array( 'post_type' => 'deprecated_log' ), array( 'post_type' => 'nacin_deprecated' ) );
+			$wpdb->update( $wpdb->postmeta, array( 'meta_key' => '_deprecated_log_meta' ), array( 'meta_key' => '_nacin_deprecated_meta' ) );
+			$this->options['last_viewed'] = current_time( 'mysql' );
+		}
 	}
 
 	/**
@@ -216,15 +272,15 @@ class Nacin_Deprecated {
 
 		if ( ! isset( $existing[ $post_name ] ) ) {
 			$post_id = wp_insert_post( array(
-				'post_date' => current_time( 'mysql' ),
+				'post_date'    => current_time( 'mysql' ),
 				'post_excerpt' => $excerpt,
-				'post_type' => $this->pt,
-				'post_title' => $deprecated,
+				'post_type'    => $this->pt,
+				'post_title'   => $deprecated,
 				'post_content' => $content . "\n<!--more-->\n" . $excerpt, // searches
-				'post_name' => $post_name,
+				'post_name'    => $post_name,
 			) );
 			// For safe keeping.
-			update_post_meta( $post_id, '_nacin_deprecated_meta', array_merge( array( 'type' => $type ), $args ) );
+			update_post_meta( $post_id, '_deprecated_log_meta', array_merge( array( 'type' => $type ), $args ) );
 			$existing[ $post_name ] = $post_id;
 		} else {
 			$post_id = $existing[ $post_name ]->ID;
@@ -255,7 +311,7 @@ class Nacin_Deprecated {
 				echo get_the_date( __('Y/m/d g:i:s A', 'log-deprecated' ) );
 				break;
 			case 'deprecated_version' :
-				$meta = get_post_meta( $post_id, '_nacin_deprecated_meta', true );
+				$meta = get_post_meta( $post_id, '_deprecated_log_meta', true );
 				echo $meta['version'];
 				break;
 			case 'deprecated_alternative':
@@ -285,18 +341,14 @@ class Nacin_Deprecated {
 	}
 
 	/**
-	 * Prints basic CSS. Also an unrelated cheap hack.
+	 * Prints basic CSS.
 	 */
 	function action_admin_print_styles() {
 		global $current_screen;
 		if ( 'edit-' . $this->pt != $current_screen->id )
 			return;
 
-		// Hides 'Mine (X)', though I hide those via CSS anyway. Again, cheap hack.
-		$GLOBALS['user_posts'] = false;
-
 		// Hides Add New button, bulk actions, sets some column widths, uses the plugins screen icon.
-		// @todo Should probably actually disable new posts.
 	?>
 <style type="text/css">
 .add-new-h2, .view-switch, .subsubsub,
@@ -309,6 +361,9 @@ body.no-js .tablenav select[name^=action], body.no-js #doaction, body.no-js #doa
 	<?php
 	}
 
+	/**
+	 * Basic JS -- changes Bulk Action options.
+	 */
 	function action_admin_footer_edit_php() {
 		global $current_screen;
 		if ( 'edit-' . $this->pt != $current_screen->id )
@@ -360,6 +415,8 @@ jQuery(document).ready( function($) {
 
 		if ( isset( $_GET['delete_all'] ) || isset( $_GET['delete_all2'] ) )
 			$_GET['post_status'] = 'draft';
+		$this->options['last_viewed'] = current_time('mysql');
+		update_option( $this->option_name, $this->options );
 	}
 
 	/**
@@ -368,9 +425,16 @@ jQuery(document).ready( function($) {
 	 * Should hypothetically be forwards compatible.
 	 */
 	function action_admin_menu() {
-		global $menu, $submenu;
+		global $menu, $submenu, $typenow, $wpdb;
 		unset( $menu[2048] );
-		add_submenu_page( 'tools.php', __( 'Deprecated Calls', 'log-deprecated' ), __( 'Deprecated Calls', 'log-deprecated' ), 'activate_plugins', 'edit.php?post_type=' . $this->pt );
+		$page_title = $label = __( 'Deprecated Calls', 'log-deprecated' );
+		if ( $this->pt != $typenow && $this->options && ! empty( $this->options['last_viewed'] ) ) {
+			$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_type = %s AND post_date > %s", $this->pt, $this->options['last_viewed'] ) );
+			if ( $count )
+				$label = sprintf( __( 'Deprecated Calls %s', 'log-deprecated' ), "<span class='update-plugins count-$count'><span class='update-count'>" . number_format_i18n( $count ) . '</span></span>' );
+		}
+	
+		add_submenu_page( 'tools.php', $page_title, $label, 'activate_plugins', 'edit.php?post_type=' . $this->pt );
 	}
 
 	/**
@@ -406,7 +470,7 @@ jQuery(document).ready( function($) {
 	 * Runs on activation. Simply registers the uninstall routine.
 	 */
 	function on_activation() {
-		register_uninstall_hook( __FILE__, array( 'Nacin_Deprecated', 'on_uninstall' ) );
+		register_uninstall_hook( __FILE__, array( 'Deprecated_Log', 'on_uninstall' ) );
 	}
 
 	/**
@@ -414,8 +478,10 @@ jQuery(document).ready( function($) {
 	 */
 	function on_uninstall() {
 		global $wpdb;
-		$wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'nacin_deprecated'" );
+		$wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'deprecated_log'" );
 	}
 }
 /** Initialize. */
-$GLOBALS['nacin_deprecated'] = new Nacin_Deprecated;
+$GLOBALS['deprecated_log_instance'] = new Deprecated_Log;
+
+endif;

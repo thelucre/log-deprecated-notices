@@ -406,7 +406,9 @@ jQuery(document).ready( function($) {
 	}
 
 	/**
-	 * Cheap hack to show a 'Clear Log' button.
+	 * Post filters.
+	 *
+	 * Also, a cheap hack to show a 'Clear Log' button.
 	 * Somehow, there is not a decent hook anywhere on edit.php (but there is for edit-comments.php).
 	 */
 	function action_restrict_manage_posts() {
@@ -423,28 +425,32 @@ jQuery(document).ready( function($) {
 			'file'          => __( 'File',           'log-deprecated' ),
 		);
 		$types_used = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_type'" );
-		echo '<select name="deprecated_type">';
-		echo '<option value="">' . esc_html__( 'Show all types', 'log-deprecated' ) . '</option>';
-		foreach ( $types_used as $type ) {
-			$selected = ! empty( $_GET['deprecated_type'] ) ? selected( $_GET['deprecated_type'], $type, false ) : '';
-			echo '<option' . $selected . ' value="' . esc_attr( $type ) . '">' . esc_html( $types[ $type ] ) . '</option>';
+		if ( count( $types_used ) > 1 ) {
+			echo '<select name="deprecated_type">';
+			echo '<option value="">' . esc_html__( 'Show all types', 'log-deprecated' ) . '</option>';
+			foreach ( $types_used as $type ) {
+				$selected = ! empty( $_GET['deprecated_type'] ) ? selected( $_GET['deprecated_type'], $type, false ) : '';
+				echo '<option' . $selected . ' value="' . esc_attr( $type ) . '">' . esc_html( $types[ $type ] ) . '</option>';
+			}
+			echo '</select> ';
 		}
-		echo '</select> ';
 
 		$versions = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_version'" );
-		echo '<select name="deprecated_version">';
-		echo '<option value="">' . esc_html__( 'Since', 'log-deprecated' ) . '</option>';
-		usort( $versions, 'version_compare' );
-		foreach ( array_reverse( $versions ) as $version ) {
-			$selected = ! empty( $_GET['deprecated_version'] ) ? selected( $_GET['deprecated_version'], $version, false ) : '';
-			echo '<option' . $selected . ' value="' . esc_attr( $version ) . '">' . esc_html( '<= ' . $version ) . '</option>';
+		if ( count( $versions ) > 1 ) {
+			echo '<select name="deprecated_version">';
+			echo '<option value="">' . esc_html__( 'Since', 'log-deprecated' ) . '</option>';
+			usort( $versions, 'version_compare' );
+			foreach ( array_reverse( $versions ) as $version ) {
+				$selected = ! empty( $_GET['deprecated_version'] ) ? selected( $_GET['deprecated_version'], $version, false ) : '';
+				echo '<option' . $selected . ' value="' . esc_attr( $version ) . '">' . esc_html( '&#8804; ' . $version ) . '</option>';
+			}
+			echo '</select> ';
 		}
-		echo '</select> ';
 
 		return; // @disable
 
 		$files = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_in_file'" );
-		if ( $files ) {
+		if ( count( $files > 1 ) ) {
 			echo '<select name="deprecated_file">';
 			echo '<option value="">' . esc_html__( 'Show all files', 'log-deprecated' ) . '</option>';
 			foreach ( array_filter( $files ) as $file ) {
@@ -457,7 +463,14 @@ jQuery(document).ready( function($) {
 		}
 	}
 
+	/**
+	 * Filters the request based on additional post filters.
+	 *
+	 * Adds posts_where and posts_join filters as necessary, if more than one meta key/value pair is queried.
+	 */
 	function filter_request( $qv ) {
+		if ( ! is_admin() )
+			return;
 		$pairs = array();
 		if ( ! empty( $_GET['deprecated_file'] ) )
 			$pairs[] = array( '_deprecated_log_in_file', stripslashes( $_GET['deprecated_file'] ), '=' );
@@ -477,6 +490,9 @@ jQuery(document).ready( function($) {
 		return $qv;
 	}
 
+	/**
+	 * Handles additional meta key/value filters in the WHERE clause.
+	 */
 	function filter_posts_where( $where, $object ) {
 		global $wpdb;
 		foreach ( $this->_additional_filters as $pair )
@@ -484,6 +500,9 @@ jQuery(document).ready( function($) {
 		return $where;
 	}
 
+	/**
+	 * Creates additional joins to handle additional meta key/value filters.
+	 */
 	function filter_posts_join( $join, $object ) {
 		global $wpdb;
 		foreach ( $this->_additional_filters as $pair )
@@ -503,6 +522,12 @@ jQuery(document).ready( function($) {
 		return $translation;
 	}
 
+	/**
+	 * Changes status filter and updated strings.
+	 *
+	 * 'All' and 'Trash' becomes 'Log' and 'Muted'.
+	 * 'Item moved/deleted/restored' are modified as well.
+	 */
 	function filter_ngettext( $translation, $single, $plural, $number ) {
 		switch ( $single ) {
 			case 'All <span class="count">(%s)</span>' :

@@ -6,7 +6,7 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.1-beta-8
+ * Version: 0.1-beta-9
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
@@ -431,6 +431,16 @@ jQuery(document).ready( function($) {
 		}
 		echo '</select> ';
 
+		$versions = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_version'" );
+		echo '<select name="deprecated_version">';
+		echo '<option value="">' . esc_html__( 'Since', 'log-deprecated' ) . '</option>';
+		usort( $versions, 'version_compare' );
+		foreach ( array_reverse( $versions ) as $version ) {
+			$selected = ! empty( $_GET['deprecated_version'] ) ? selected( $_GET['deprecated_version'], $version, false ) : '';
+			echo '<option' . $selected . ' value="' . esc_attr( $version ) . '">' . esc_html( '<= ' . $version ) . '</option>';
+		}
+		echo '</select> ';
+
 		return; // @disable
 
 		$files = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_in_file'" );
@@ -450,12 +460,14 @@ jQuery(document).ready( function($) {
 	function filter_request( $qv ) {
 		$pairs = array();
 		if ( ! empty( $_GET['deprecated_file'] ) )
-			$pairs[] = array( '_deprecated_log_in_file', stripslashes( $_GET['deprecated_file'] ) );
+			$pairs[] = array( '_deprecated_log_in_file', stripslashes( $_GET['deprecated_file'] ), '=' );
 		if ( ! empty( $_GET['deprecated_type'] ) )
-			$pairs[] = array( '_deprecated_log_type', $_GET['deprecated_type'] );
+			$pairs[] = array( '_deprecated_log_type', $_GET['deprecated_type'], '=' );
+		if ( ! empty( $_GET['deprecated_version'] ) )
+			$pairs[] = array( '_deprecated_log_version', ( $_GET['deprecated_version'] + 0 ), '<=' );
 		if ( ! empty( $pairs ) ) {
 			$pair = array_shift( $pairs );
-			list( $qv['meta_key'], $qv['meta_value'] ) = $pair;
+			list( $qv['meta_key'], $qv['meta_value'], $qv['meta_compare'] ) = $pair;
 			if ( ! empty( $pairs ) ) {
 				add_filter( 'posts_where', array( &$this, 'filter_posts_where' ), 10, 2 );
 				add_filter( 'posts_join',  array( &$this, 'filter_posts_join'  ), 10, 2 );
@@ -468,7 +480,7 @@ jQuery(document).ready( function($) {
 	function filter_posts_where( $where, $object ) {
 		global $wpdb;
 		foreach ( $this->_additional_filters as $pair )
-			$where .= $wpdb->prepare(" AND postmeta{$pair[0]}.meta_key = %s AND $wpdb->postmeta.meta_value = %s ", $pair[0], $pair[1] );
+			$where .= $wpdb->prepare(" AND postmeta{$pair[0]}.meta_key = %s AND postmeta{$pair[0]}.meta_value {$pair[2]} %s ", $pair[0], $pair[1] );
 		return $where;
 	}
 

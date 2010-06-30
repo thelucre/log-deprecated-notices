@@ -35,7 +35,7 @@ These are the various things on the @todo:
 
  * Plugin identification. Also, an unobstrusive note on plugins page next to said plugins.
  * Perhaps the ability to auto-purge the log.
- * Ability to filter on version number, or file or plugin in which the deprecated functionality is used, etc.
+ * Ability to filter on file or plugin in which the deprecated functionality is used.
  * Offer some kind of better multisite support.
 
 Want to add something here? I'm all ears. plugins at [andrewnacin.com](http://andrewnacin.com/) or @[nacin](http://twitter.com/nacin) on Twitter.

@@ -6,7 +6,7 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.1-beta-9
+ * Version: 0.1-RC-1
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
@@ -28,7 +28,7 @@ class Deprecated_Log {
 	 *
 	 * @var int
 	 */
-	var $db_version = 3;
+	var $db_version = 4;
 
 	/**
 	 * Options.
@@ -123,14 +123,17 @@ class Deprecated_Log {
 	 */
 	function upgrade( $current_db_version ) {
 		global $wpdb;
+		// Change post type name and the meta key prefix, also set up a new option.
 		if ( $current_db_version < 1 ) {
 			$wpdb->update( $wpdb->posts, array( 'post_type' => 'deprecated_log' ), array( 'post_type' => 'nacin_deprecated' ) );
 			$wpdb->update( $wpdb->postmeta, array( 'meta_key' => '_deprecated_log_meta' ), array( 'meta_key' => '_nacin_deprecated_meta' ) );
 			$this->options['last_viewed'] = current_time( 'mysql' );
 		}
+		// We're gonna go with publish as the default now and also leverage Trash.
 		if ( $current_db_version < 2 )
 			$wpdb->update( $wpdb->posts, array( 'post_status' => 'publish' ), array( 'post_type' => 'deprecated_log' ) );
-		if ( $current_db_version < 3 ) {
+		// Split the original meta key into individual keys.
+		if ( $current_db_version < 4 ) {
 			$meta_rows = $wpdb->get_results( "SELECT * FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_meta'" );
 			foreach ( $meta_rows as $meta_row ) {
 				$meta = maybe_unserialize( $meta_row->meta_value );
@@ -138,6 +141,8 @@ class Deprecated_Log {
 					add_post_meta( $meta_row->post_id, '_deprecated_log_' . $key, $meta[ $key ], true );
 				}
 			}
+			// Remove bad data caused by an undefined index.
+			$wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_'" );
 		}
 	}
 
@@ -297,7 +302,7 @@ class Deprecated_Log {
 			add_post_meta( $post_id, '_deprecated_log_meta', array_merge( array( 'type' => $type ), $args ) );
 			add_post_meta( $post_id, '_deprecated_log_type', $type, true );
 			foreach ( array_keys( $args ) as $meta_key )
-				add_post_meta( $post_id, '_deprecated_log_' . $key, $args[ $meta_key ], true );
+				add_post_meta( $post_id, '_deprecated_log_' . $meta_key, $args[ $meta_key ], true );
 			$existing[ $post_name ] = $post_id;
 		} else {
 			$post_id = $existing[ $post_name ]->ID;

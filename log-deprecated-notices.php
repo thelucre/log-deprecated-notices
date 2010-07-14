@@ -303,7 +303,7 @@ class Deprecated_Log {
 			add_post_meta( $post_id, '_deprecated_log_type', $type, true );
 			foreach ( array_keys( $args ) as $meta_key )
 				add_post_meta( $post_id, '_deprecated_log_' . $meta_key, $args[ $meta_key ], true );
-			$existing[ $post_name ] = $post_id;
+			$existing[ $post_name ] = (object) array( 'post_name' => $post_name, 'ID' => $post_id );
 		} else {
 			$post_id = $existing[ $post_name ]->ID;
 		}

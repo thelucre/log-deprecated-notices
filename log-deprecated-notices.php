@@ -6,7 +6,7 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.1-RC2
+ * Version: 0.1-RC3
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2
@@ -417,7 +417,10 @@ jQuery(document).ready( function($) {
 	 * Somehow, there is not a decent hook anywhere on edit.php (but there is for edit-comments.php).
 	 */
 	function action_restrict_manage_posts() {
-		global $wpdb;
+		global $wpdb, $typenow;
+		if ( $this->pt != $typenow )
+			return;
+
 		$this->_is_trash = $GLOBALS['is_trash'];
 		$GLOBALS['is_trash'] = true;
 		add_filter( 'gettext', array( &$this, 'filter_gettext_empty_trash' ), 10, 2 );

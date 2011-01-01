@@ -1,9 +1,9 @@
 === Log Deprecated Notices ===
 Contributors: nacin
 Tags: deprecated, logging, admin, WP_DEBUG, E_NOTICE, developer
-Requires at least: 3.0
-Tested up to: 3.1-alpha
-Stable tag: trunk
+Requires at least: 3.1
+Tested up to: 3.2-alpha
+Stable tag: 0.1-RC3
 
 Logs the usage of deprecated files, functions, and function arguments, and identifies where the deprecated functionality is being used.
 
@@ -13,15 +13,33 @@ This plugin logs the usage of deprecated files, functions, and function argument
 
 This is a plugin for developers. WP_DEBUG is not needed, though its general usage is strongly recommended. Deprecated notices normally exposed by WP_DEBUG will be logged instead.
 
+This plugin also logs incorrect function usage, which WordPress started reporting in 3.1.
+
 Please report any bugs to plugins at [andrewnacin.com](http://andrewnacin.com/), or find me in IRC #wordpress-dev or @[nacin](http://twitter.com/nacin) on Twitter.
 
-This is beta software. It works, but there's a lot left on the todo (check out the Other Notes tab). Have an idea? Let me know.
+This is young software. It works, but there's a lot left on the todo (check out the Other Notes tab). Have an idea? Let me know.
 
 == Installation ==
 
-1. Upload `log-deprecated-notices.php` to the `/wp-content/plugins/` directory
-2. Activate the plugin through the 'Plugins' menu in WordPress
-3. View the log in the 'Tools' menu, under 'Deprecated Calls'
+For an automatic installation through WordPress:
+
+1. Go to the 'Add New' plugins screen in your WordPress admin area
+1. Search for 'Log Deprecated Notices'
+1. Click 'Install Now' and activate the plugin
+1. View the log in the 'Tools' menu, under 'Deprecated Calls'
+
+Or use a nifty tool by WordPress lead developer Mark Jaquith:
+
+1. Visit [this link](http://coveredwebservices.com/wp-plugin-install/?plugin=log-deprecated-notices) and follow the instructions.
+
+For a manual installation via FTP:
+
+1. Upload the `log-deprecated-notices` directory to the `/wp-content/plugins/` directory
+1. Activate the plugin through the 'Plugins' screen in your WordPress admin area
+
+To upload the plugin through WordPress, instead of FTP:
+
+1. Upload the downloaded zip file on the 'Add New' plugins screen (see the 'Upload' tab) in your WordPress admin area and activate.
 
 This plugin is will remove log entries when it is uninstalled and deleted.
 

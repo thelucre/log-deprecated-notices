@@ -63,8 +63,8 @@ class Deprecated_Log {
 	 * Constructor. Adds hooks.
 	 */
 	function Deprecated_Log() {
-		// Bail without 3.1.
-		if ( ! function_exists( '_doing_it_wrong' ) )
+		// Bail without 3.0.
+		if ( ! function_exists( '__return_false' ) )
 			return;
 
 		// Registers the uninstall hook.
@@ -349,10 +349,10 @@ class Deprecated_Log {
 	 * @param array $meta_pairs
 	 */
 	function queued_post( $post_name, $post_data, $meta_pairs ) {
-		if ( isset( $this->queued_post[ $post_name ] ) ) {
-			$this->queued_post[ $post_name ]->count++;
+		if ( isset( $this->queued_posts[ $post_name ] ) ) {
+			$this->queued_posts[ $post_name ]->count++;
 		} else {
-			$this->queued_post[ $post_name ] = (object) array(
+			$this->queued_posts[ $post_name ] = (object) array(
 				'post'  => $post_data,
 				'count' => 1,
 				'meta'  => $meta_pairs,
@@ -366,7 +366,7 @@ class Deprecated_Log {
 	function shutdown() {
 		global $wpdb;
 		$existing = (array) $wpdb->get_results( $wpdb->prepare( "SELECT post_name, ID, comment_count FROM $wpdb->posts WHERE post_type = %s", $this->pt ), OBJECT_K );
-		foreach ( $this->queued_post as $post_name => $queued_post ) {
+		foreach ( $this->queued_posts as $post_name => $queued_post ) {
 			if ( isset( $existing[ $post_name ] ) ) {
 				$new_count = $existing[ $post_name ]->comment_count + $queued_post->count;
 				$wpdb->update(
@@ -499,8 +499,12 @@ jQuery(document).ready( function($) {
 	function filter_gettext_bulk_actions( $translation, $text ) {
 		switch ( $text ) {
 			case 'Empty Trash' :
-				global $wp_list_table;
-				$wp_list_table->is_trash = $this->_is_trash;
+				global $wp_list_table, $is_trash;
+				if ( isset( $wp_list_table ) )
+					$wp_list_table->is_trash = $this->_is_trash;
+				else
+					$is_trash = $this->_is_trash;
+
 				return __( 'Clear Log', 'log-deprecated' );
 			case 'Move to Trash' :
 				return __( 'Mute', 'log-deprecated' );
@@ -519,12 +523,18 @@ jQuery(document).ready( function($) {
 	 * Somehow, there is not a decent hook anywhere on edit.php (but there is for edit-comments.php).
 	 */
 	function action_restrict_manage_posts() {
-		global $wpdb, $typenow, $wp_list_table;
+		global $wpdb, $typenow, $wp_list_table, $is_trash;
 		if ( $this->pt != $typenow )
 			return;
 
-		$this->_is_trash = $wp_list_table->is_trash;
-		$wp_list_table->is_trash = true;
+		if ( isset( $wp_list_table ) ) {
+			$this->_is_trash = $wp_list_table->is_trash;
+			$wp_list_table->is_trash = true;
+		} else {
+			$this->_is_trash = $is_trash;
+			$is_trash = true;
+		}
+
 		add_filter( 'gettext', array( &$this, 'filter_gettext_bulk_actions' ), 10, 2 );
 
 		$types = array(

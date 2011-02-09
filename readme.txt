@@ -3,7 +3,7 @@ Contributors: nacin
 Tags: deprecated, logging, admin, WP_DEBUG, E_NOTICE, developer
 Requires at least: 3.0
 Tested up to: 3.2-alpha
-Stable tag: 0.1-RC3
+Stable tag: trunk
 
 Logs the usage of deprecated files, functions, and function arguments, and identifies where the deprecated functionality is being used.
 

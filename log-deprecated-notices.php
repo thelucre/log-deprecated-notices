@@ -6,10 +6,10 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.2-beta
+ * Version: 0.2-RC1
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
- * License: GPLv2
+ * License: GPLv2 or later
  */
 
 if ( ! class_exists( 'Deprecated_Log' ) ) :
@@ -53,6 +53,13 @@ class Deprecated_Log {
 	var $pt = 'deprecated_log';
 
 	/**
+	 * Logging queue, to be inserted on shutdown.
+	 *
+	 * @var array
+	 */
+	var $queued_posts = array();
+
+	/**
 	 * Constructor. Adds hooks.
 	 */
 	function Deprecated_Log() {
@@ -65,6 +72,11 @@ class Deprecated_Log {
 
 		// Registers post type.
 		add_action( 'init', array( &$this, 'action_init' ) );
+
+		// Log on shutdown.
+		add_action( 'shutdown', array( &$this, 'shutdown' ) );
+		// For testing, so the queries are picked up by the Debug Bar:
+		// add_action( 'admin_footer', array( &$this, 'shutdown' ), 999 );
 
 		// Silence E_NOTICE for deprecated usage.
 		if ( WP_DEBUG ) {
@@ -91,8 +103,12 @@ class Deprecated_Log {
 		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
 		// Column headers.
 		add_filter( "manage_{$this->pt}_posts_columns", array( &$this, 'filter_manage_post_type_posts_columns' ) );
+		// Filters and 'Clear Log'.
+		add_action( 'restrict_manage_posts',            array( &$this, 'action_restrict_manage_posts' ) );
 		// Modify Bulk Actions.
 		add_action( "bulk_actions-edit-{$this->pt}",    array( &$this, 'filter_bulk_actions' ) );
+		// Basic JS (changes Bulk Actions options).
+		add_action( 'admin_footer-edit.php',            array( &$this, 'action_admin_footer_edit_php' ) );
 		// Add/Edit permissions handling, make 'Clear Log' work, and other actions.
 		foreach ( array( 'edit.php', 'post.php', 'post-new.php' ) as $item )
 			add_action( "load-{$item}",                 array( &$this, 'action_load_edit_php' ) );
@@ -101,10 +117,6 @@ class Deprecated_Log {
 		add_filter( 'request',                          array( &$this, 'filter_request' ) );
 		// Don't have the 'New Post' favorites action.
 		add_filter( 'favorite_actions',                 array( &$this, 'favorite_actions' ) );
-
-		// Custom list table.
-		add_filter( 'get_list_table_WP_Posts_List_Table',       array( &$this, 'filter_get_list_table' ) );
-		add_filter( 'get_list_table_Deprecated_Log_List_Table', array( &$this, 'filter_get_list_table' ) );
 	}
 
 	/**
@@ -256,10 +268,6 @@ class Deprecated_Log {
 	function log( $type, $args ) {
 		global $wpdb;
 
-		static $existing = null;
-		if ( is_null( $existing ) )
-			$existing = (array) $wpdb->get_results( $wpdb->prepare( "SELECT post_name, ID FROM $wpdb->posts WHERE post_type = %s", $this->pt ), OBJECT_K );
-
 		extract( $args );
 
 		switch ( $type ) {
@@ -311,27 +319,68 @@ class Deprecated_Log {
 
 		$post_name = md5( $type . implode( $args ) );
 
-		if ( ! isset( $existing[ $post_name ] ) ) {
-			$post_id = wp_insert_post( array(
-				'post_date'    => current_time( 'mysql' ),
-				'post_excerpt' => $excerpt,
-				'post_type'    => $this->pt,
-				'post_status'  => 'publish',
-				'post_title'   => $deprecated,
-				'post_content' => $content . "\n<!--more-->\n" . $excerpt, // searches
-				'post_name'    => $post_name,
-			) );
-			// For safe keeping.
-			add_post_meta( $post_id, '_deprecated_log_meta', array_merge( array( 'type' => $type ), $args ) );
-			add_post_meta( $post_id, '_deprecated_log_type', $type, true );
-			foreach ( array_keys( $args ) as $meta_key )
-				add_post_meta( $post_id, '_deprecated_log_' . $meta_key, $args[ $meta_key ], true );
-			$existing[ $post_name ] = (object) array( 'post_name' => $post_name, 'ID' => $post_id );
-		} else {
-			$post_id = $existing[ $post_name ]->ID;
+		$meta_pairs = array(
+			'_deprecated_log_meta' => array_merge( array( 'type' => $type ), $args ),
+			'_deprecated_log_type' => $type,
+		);
+
+		foreach ( array_keys( $args ) as $meta_key ) {
+			$meta_pairs[ '_deprecated_log_' . $meta_key ] = $args[ $meta_key ];
 		}
-		// Update comment_count.
-		$wpdb->query( $wpdb->prepare( "UPDATE $wpdb->posts SET comment_count = comment_count + 1, post_date = %s WHERE ID = %d", current_time( 'mysql' ), $post_id ) );
+
+		$post_data = array(
+			'post_date'    => current_time( 'mysql' ),
+			'post_excerpt' => $excerpt,
+			'post_type'    => $this->pt,
+			'post_status'  => 'publish',
+			'post_title'   => $deprecated,
+			'post_content' => $content . "\n<!--more-->\n" . $excerpt, // searches
+			'post_name'    => $post_name,
+		);
+
+		$this->queued_post( $post_name, $post_data, $meta_pairs );
+	}
+
+	/**
+	 * Queues a post for final submission to the database.
+	 *
+	 * @param string $post_name
+	 * @param array $post_data
+	 * @param array $meta_pairs
+	 */
+	function queued_post( $post_name, $post_data, $meta_pairs ) {
+		if ( isset( $this->queued_post[ $post_name ] ) ) {
+			$this->queued_post[ $post_name ]->count++;
+		} else {
+			$this->queued_post[ $post_name ] = (object) array(
+				'post'  => $post_data,
+				'count' => 1,
+				'meta'  => $meta_pairs,
+			);
+		}
+	}
+
+	/**
+	 * Logs all queued posts and counts on shutdown.
+	 */
+	function shutdown() {
+		global $wpdb;
+		$existing = (array) $wpdb->get_results( $wpdb->prepare( "SELECT post_name, ID, comment_count FROM $wpdb->posts WHERE post_type = %s", $this->pt ), OBJECT_K );
+		foreach ( $this->queued_post as $post_name => $queued_post ) {
+			if ( isset( $existing[ $post_name ] ) ) {
+				$new_count = $existing[ $post_name ]->comment_count + $queued_post->count;
+				$wpdb->update(
+					$wpdb->posts,
+					array( 'comment_count' => $new_count, 'post_date' => current_time( 'mysql' ) ),
+					array( 'ID' => $existing[ $post_name ]->ID )
+				);
+			} else {
+				$post_id = wp_insert_post( $queued_post->post );
+				foreach ( $queued_post->meta as $meta_key => $meta_value )
+					update_post_meta( $post_id, $meta_key, $meta_value );
+				$wpdb->update( $wpdb->posts, array( 'comment_count' => 1 ), array( 'ID' => $post_id ) );
+			}
+		}
 	}
 
 	/**
@@ -413,17 +462,116 @@ class Deprecated_Log {
 	}
 
 	/**
+	 * Basic JS -- changes Bulk Action options.
+	 */
+	function action_admin_footer_edit_php() {
+		global $current_screen;
+		if ( 'edit-' . $this->pt != $current_screen->id )
+			return;
+?>
+<script type="text/javascript">
+//<![CDATA[
+jQuery(document).ready( function($) {
+	var s = $('div.actions select[name^=action]');
+	s.find('option[value=delete]').remove();
+	s.find('option[value=trash]').text('<?php echo addslashes( __( 'Mute', 'log-deprecated' ) ); ?>');
+	s.find('option[value=untrash]').text('<?php echo addslashes( __( 'Unmute', 'log-deprecated' ) ); ?>');
+	s.append('<option value="delete"><?php echo addslashes( __( 'Delete', 'log-deprecated' ) ); ?></option>');
+});
+//]]>
+</script>
+<?php
+	}
+
+	/**
 	 * Modifies bulk actions.
 	 *
+	 * We're allowed to use this filter in 3.1, but only to remove.
 	 */
 	function filter_bulk_actions( $actions ) {
-		$output = array();
-		if ( isset( $actions['trash'] ) ) // seems nicer than checking $wp_list_table->is_trash
-			$output['trash'] = __( 'Mute', 'log-deprecated' );
-		elseif ( isset( $actions['untrash'] ) )
-			$output['untrash'] = __( 'Unmute', 'log-deprecated' );
-		$output['delete'] = __( 'Delete', 'log-deprecated' );
-		return $output;
+		unset( $actions['edit'] );
+		return $actions;
+	}
+
+	/**
+	 * Modifies 'Empty Trash' to 'Clear Log'.
+	 */
+	function filter_gettext_bulk_actions( $translation, $text ) {
+		switch ( $text ) {
+			case 'Empty Trash' :
+				global $wp_list_table;
+				$wp_list_table->is_trash = $this->_is_trash;
+				return __( 'Clear Log', 'log-deprecated' );
+			case 'Move to Trash' :
+				return __( 'Mute', 'log-deprecated' );
+			case 'Restore' :
+				return __( 'Unmute', 'log-deprecated' );
+			case 'Delete Permanently' :
+				return __( 'Delete', 'log-deprecated' );
+		}
+		return $translation;
+	}
+
+	/**
+	 * Post filters.
+	 *
+	 * Also, a cheap hack to show a 'Clear Log' button.
+	 * Somehow, there is not a decent hook anywhere on edit.php (but there is for edit-comments.php).
+	 */
+	function action_restrict_manage_posts() {
+		global $wpdb, $typenow, $wp_list_table;
+		if ( $this->pt != $typenow )
+			return;
+
+		$this->_is_trash = $wp_list_table->is_trash;
+		$wp_list_table->is_trash = true;
+		add_filter( 'gettext', array( &$this, 'filter_gettext_bulk_actions' ), 10, 2 );
+
+		$types = array(
+			'constant'      => __( 'Constant',        'log-deprecated' ),
+			'function'      => __( 'Function',        'log-deprecated' ),
+			'argument'      => __( 'Argument',        'log-deprecated' ),
+			'functionality' => __( 'Functionality',   'log-deprecated' ),
+			'file'          => __( 'File',            'log-deprecated' ),
+			'wrong'         => __( 'Incorrect Usage', 'log-deprecated' ),
+		);
+		$types_used = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_type'" );
+		if ( count( $types_used ) > 1 ) {
+			echo '<select name="deprecated_type">';
+			echo '<option value="">' . esc_html__( 'Show all types', 'log-deprecated' ) . '</option>';
+			foreach ( $types_used as $type ) {
+				$selected = ! empty( $_GET['deprecated_type'] ) ? selected( $_GET['deprecated_type'], $type, false ) : '';
+				echo '<option' . $selected . ' value="' . esc_attr( $type ) . '">' . esc_html( $types[ $type ] ) . '</option>';
+			}
+			echo '</select>';
+		}
+
+		$versions = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_version'" );
+		if ( count( $versions ) > 1 ) {
+			echo '<select name="deprecated_version">';
+			echo '<option value="">' . esc_html__( 'Since', 'log-deprecated' ) . '</option>';
+			usort( $versions, 'version_compare' );
+			foreach ( array_reverse( $versions ) as $version ) {
+				$selected = ! empty( $_GET['deprecated_version'] ) ? selected( $_GET['deprecated_version'], $version, false ) : '';
+				echo '<option' . $selected . ' value="' . esc_attr( $version ) . '">' . esc_html( '&#8804; ' . $version ) . '</option>';
+			}
+			echo '</select> ';
+		}
+
+		return; // @disable
+
+		$files = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_in_file'" );
+		if ( count( $files > 1 ) ) {
+			echo '<select name="deprecated_file">';
+			echo '<option value="">' . esc_html__( 'Show all files', 'log-deprecated' ) . '</option>';
+			foreach ( array_filter( $files ) as $file ) {
+				$selected = '';
+				if ( ! empty( $_GET['deprecated_file'] ) )
+					$selected = selected( stripslashes( $_GET['deprecated_file'] ), $file, false );
+				echo '<option' . $selected . ' value="' . esc_attr( $file ) . '">' . esc_html( $file ) . '</option>';
+			}
+			echo '</select>';
+		}
 	}
 
 	/**
@@ -505,7 +653,7 @@ class Deprecated_Log {
 	 *
 	 * Then it gets our 'Clear Log' button to work on the 'All' page, as it
 	 * uses the 'Empty Trash' functionality and requires a post status to work
-	 * off of, not the 'all' status.
+	 * off of, not the 'all' status. Don't try this at home, folks.
 	 *
 	 * We're using 'All' because we can't remove that, but by directly modifying
 	 * the show_in_admin_status_list property of the publish post status (also in
@@ -540,6 +688,8 @@ class Deprecated_Log {
 
 		foreach ( array( 'ngettext', 'ngettext_with_context' ) as $filter )
 			add_filter( $filter, array( &$this, 'filter_ngettext' ), 10, 4 );
+
+		add_filter( 'gettext', array( &$this, 'filter_gettext_bulk_actions' ), 10, 2 );
 	}
 
 	/**
@@ -601,21 +751,6 @@ class Deprecated_Log {
 		$wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'deprecated_log'" );
 		$wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key LIKE '\_deprecated\_log\_%'" );
 		delete_option( 'log_deprecated_notices' );
-	}
-
-
-	/**
-	 * Load the list table.
-	 *
-	 * @since 0.2
-	 */
-	function filter_get_list_table( $table ) {
-		global $current_screen;
-		if ( 'edit-' . $this->pt != $current_screen->id )
-			return $table;
-		require_list_table( 'WP_Posts_List_Table' );
-		require plugin_dir_path( __FILE__ ) . 'class-deprecated-log-list-table.php';
-		return 'Deprecated_Log_List_Table';
 	}
 
 	/**

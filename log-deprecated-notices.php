@@ -5,8 +5,8 @@
 /*
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
- * Description: Logs the usage of deprecated files, functions, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.2-RC1
+ * Description: Logs the usage of deprecated files, functions, hooks, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
+ * Version: 0.3-beta1
  * Author: Andrew Nacin
  * Author URI: http://andrewnacin.com/
  * License: GPLv2 or later
@@ -25,11 +25,18 @@ if ( ! class_exists( 'Deprecated_Log' ) ) :
 class Deprecated_Log {
 
 	/**
+	 * Instance.
+	 *
+	 * @var object
+	 */
+	static $instance;
+
+	/**
 	 * DB version.
 	 *
 	 * @var int
 	 */
-	var $db_version = 4;
+	const db_version = 4;
 
 	/**
 	 * Options.
@@ -43,14 +50,14 @@ class Deprecated_Log {
 	 *
 	 * @var string
 	 */
-	var $option_name = 'log_deprecated_notices';
+	const option_name = 'log_deprecated_notices';
 
 	/**
 	 * Custom post type.
 	 *
 	 * @var string
 	 */
-	var $pt = 'deprecated_log';
+	const pt = 'deprecated_log';
 
 	/**
 	 * Logging queue, to be inserted on shutdown.
@@ -63,12 +70,14 @@ class Deprecated_Log {
 	 * Constructor. Adds hooks.
 	 */
 	function Deprecated_Log() {
+		self::$instance = $this;
+
 		// Bail without 3.0.
 		if ( ! function_exists( '__return_false' ) )
 			return;
 
 		// Registers the uninstall hook.
-		register_activation_hook( __FILE__, array( 'Deprecated_Log', 'on_activation' ) );
+		register_activation_hook( __FILE__, array( &$this, 'on_activation' ) );
 
 		// Registers post type.
 		add_action( 'init', array( &$this, 'action_init' ) );
@@ -80,7 +89,7 @@ class Deprecated_Log {
 
 		// Silence E_NOTICE for deprecated usage.
 		if ( WP_DEBUG ) {
-			foreach ( array( 'deprecated_function', 'deprecated_file', 'deprecated_argument', 'doing_it_wrong' ) as $item )
+			foreach ( array( 'deprecated_function', 'deprecated_file', 'deprecated_argument', 'doing_it_wrong', 'deprecated_hook' ) as $item )
 				add_action( "{$item}_trigger_error", '__return_false' );
 		}
 
@@ -89,11 +98,12 @@ class Deprecated_Log {
 		add_action( 'deprecated_file_included', array( &$this, 'log_file'     ), 10, 4 );
 		add_action( 'deprecated_argument_run',  array( &$this, 'log_argument' ), 10, 4 );
 		add_action( 'doing_it_wrong_run',       array( &$this, 'log_wrong'    ), 10, 3 );
+		add_action( 'deprecated_hook_used',     array( &$this, 'log_hook'     ), 10, 4 );
 
 		if ( ! is_admin() )
 			return;
 
-		$this->options = get_option( $this->option_name );
+		$this->options = get_option( self::option_name );
 
 		// Textdomain and upgrade routine.
 		add_action( 'admin_init',                       array( &$this, 'action_admin_init' ) );
@@ -102,11 +112,11 @@ class Deprecated_Log {
 		// Column handling.
 		add_action( 'manage_posts_custom_column',       array( &$this, 'action_manage_posts_custom_column' ), 10, 2 );
 		// Column headers.
-		add_filter( "manage_{$this->pt}_posts_columns", array( &$this, 'filter_manage_post_type_posts_columns' ) );
+		add_filter( 'manage_' . self::pt . '_posts_columns', array( &$this, 'filter_manage_post_type_posts_columns' ) );
 		// Filters and 'Clear Log'.
 		add_action( 'restrict_manage_posts',            array( &$this, 'action_restrict_manage_posts' ) );
 		// Modify Bulk Actions.
-		add_action( "bulk_actions-edit-{$this->pt}",    array( &$this, 'filter_bulk_actions' ) );
+		add_action( 'bulk_actions-edit-' . self::pt,    array( &$this, 'filter_bulk_actions' ) );
 		// Basic JS (changes Bulk Actions options).
 		add_action( 'admin_footer-edit.php',            array( &$this, 'action_admin_footer_edit_php' ) );
 		// Add/Edit permissions handling, make 'Clear Log' work, and other actions.
@@ -123,13 +133,13 @@ class Deprecated_Log {
 	 * Attached to admin_init. Loads the textdomain and the upgrade routine.
 	 */
 	function action_admin_init() {
-		if ( false === $this->options || ! isset( $this->options['db_version'] ) || $this->options['db_version'] < $this->db_version ) {
+		if ( false === $this->options || ! isset( $this->options['db_version'] ) || $this->options['db_version'] < self::db_version ) {
 			if ( ! is_array( $this->options ) )
 				$this->options = array();
 			$current_db_version = isset( $this->options['db_version'] ) ? $this->options['db_version'] : 0;
 			$this->upgrade( $current_db_version );
-			$this->options['db_version'] = $this->db_version;
-			update_option( $this->option_name, $this->options );
+			$this->options['db_version'] = self::db_version;
+			update_option( self::option_name, $this->options );
 		}
 		load_plugin_textdomain('log-deprecated', null, dirname( plugin_basename( __FILE__ ) ) . '/languages/' );
 	}
@@ -178,6 +188,49 @@ class Deprecated_Log {
 		$in_file = $this->strip_abspath( $backtrace[ $bt ]['file'] );
 		$on_line = $backtrace[ $bt ]['line'];
 		$this->log( 'function', compact( 'deprecated', 'replacement', 'version', 'hook', 'in_file', 'on_line'  ) );
+	}
+
+	/**
+	 * Attached to deprecated_hook_used action.
+	 */
+	function log_hook( $hook, $replacement, $version, $message ) {
+		global $wp_filter;
+
+		$backtrace = debug_backtrace();
+		/*
+		echo '<pre>';
+		var_dump( $GLOBALS['wp_filter'][ $hook ] );
+		$this->queued_posts = array();
+		var_dump( $backtrace );
+		echo '</pre>';
+		//*/
+		$callbacks_attached = array();
+		foreach ( $wp_filter[ $hook ] as $priority => $callbacks ) {
+			foreach ( $callbacks as $callback ) {
+				$callbacks_attached[] = $this->callback_to_string( $callback['function'] );
+			}
+		}
+
+		// For actions fired within a function.
+		$in_file = $this->strip_abspath( $backtrace[3]['file'] );
+		$on_line = $backtrace[3]['line'] + 1; // _deprecated_file() is one line before do_action()
+
+		$deprecated = $hook;
+		foreach ( $callbacks_attached as $callback )
+			$this->log( 'hook', compact( 'deprecated', 'replacement', 'version', 'in_file', 'on_line', 'callback' ) );
+	}
+
+	/**
+	 * Returns a string representation of a callback.
+	 */
+	function callback_to_string( $callback ) {
+		if ( is_array( $callback ) ) {
+			if ( is_object( $callback[0] ) )
+				return get_class( $callback[0] ) . '::' . $callback[1];
+			else
+				return $callback[0] . '::' . $callback[1];
+		}
+		return $callback;
 	}
 
 	/**
@@ -268,7 +321,7 @@ class Deprecated_Log {
 	function log( $type, $args ) {
 		global $wpdb;
 
-		extract( $args );
+		extract( $args, EXTR_SKIP );
 
 		switch ( $type ) {
 			case 'functionality' :
@@ -289,6 +342,9 @@ class Deprecated_Log {
 			case 'wrong' :
 				$deprecated = sprintf( __( 'Incorrect Use of %s', 'log-deprecated' ), $deprecated );
 				break;
+			case 'hook' :
+				$deprecated = sprintf( __( 'Hook: %s', 'log-deprecated' ), $deprecated );
+				break;
 		}
 
 		$content = '';
@@ -304,7 +360,9 @@ class Deprecated_Log {
 		else
 			$content .= "\n" . sprintf( __( 'Deprecated in version %s.', 'log-deprecated' ), $version );
 
-		if ( ! empty( $hook ) ) {
+		if ( 'hook' == $type ) {
+			$excerpt = sprintf( __( 'The callback %3$s() is attached to this hook, which is fired in %1$s on line %2$d.' ), $in_file, $on_line, $callback );
+		} elseif ( ! empty( $hook ) ) {
 			$excerpt = sprintf( __( 'Attached to the %1$s hook, fired in %2$s on line %3$d.', 'log-deprecated' ), $hook, $in_file, $on_line );
 		} elseif ( ! empty( $menu ) ) {
 			$excerpt = __( 'An admin menu page is using user levels instead of capabilities. There is likely a related log item with specifics.', 'log-deprecated' );
@@ -331,7 +389,7 @@ class Deprecated_Log {
 		$post_data = array(
 			'post_date'    => current_time( 'mysql' ),
 			'post_excerpt' => $excerpt,
-			'post_type'    => $this->pt,
+			'post_type'    => self::pt,
 			'post_status'  => 'publish',
 			'post_title'   => $deprecated,
 			'post_content' => $content . "\n<!--more-->\n" . $excerpt, // searches
@@ -365,7 +423,7 @@ class Deprecated_Log {
 	 */
 	function shutdown() {
 		global $wpdb;
-		$existing = (array) $wpdb->get_results( $wpdb->prepare( "SELECT post_name, ID, comment_count FROM $wpdb->posts WHERE post_type = %s", $this->pt ), OBJECT_K );
+		$existing = (array) $wpdb->get_results( $wpdb->prepare( "SELECT post_name, ID, comment_count FROM $wpdb->posts WHERE post_type = %s", self::pt ), OBJECT_K );
 		foreach ( $this->queued_posts as $post_name => $queued_post ) {
 			if ( isset( $existing[ $post_name ] ) ) {
 				$new_count = $existing[ $post_name ]->comment_count + $queued_post->count;
@@ -449,7 +507,7 @@ class Deprecated_Log {
 	 */
 	function action_admin_print_styles() {
 		global $current_screen;
-		if ( 'edit-' . $this->pt != $current_screen->id )
+		if ( 'edit-' . self::pt != $current_screen->id )
 			return;
 	?>
 <style type="text/css">
@@ -466,7 +524,7 @@ class Deprecated_Log {
 	 */
 	function action_admin_footer_edit_php() {
 		global $current_screen;
-		if ( 'edit-' . $this->pt != $current_screen->id )
+		if ( 'edit-' . self::pt != $current_screen->id )
 			return;
 ?>
 <script type="text/javascript">
@@ -524,7 +582,7 @@ jQuery(document).ready( function($) {
 	 */
 	function action_restrict_manage_posts() {
 		global $wpdb, $typenow, $wp_list_table, $is_trash;
-		if ( $this->pt != $typenow )
+		if ( self::pt != $typenow )
 			return;
 
 		if ( isset( $wp_list_table ) ) {
@@ -544,6 +602,7 @@ jQuery(document).ready( function($) {
 			'functionality' => __( 'Functionality',   'log-deprecated' ),
 			'file'          => __( 'File',            'log-deprecated' ),
 			'wrong'         => __( 'Incorrect Usage', 'log-deprecated' ),
+			'hook'          => __( 'Hook',            'log-deprecated' ),
 		);
 		$types_used = $wpdb->get_col( "SELECT DISTINCT meta_value FROM $wpdb->postmeta WHERE meta_key = '_deprecated_log_type'" );
 		if ( count( $types_used ) > 1 ) {
@@ -678,8 +737,8 @@ jQuery(document).ready( function($) {
 	 */
 	function action_load_edit_php() {
 		global $current_screen;
-		if ( 'edit-' . $this->pt != $current_screen->id ) {
-			if ( $this->pt == $current_screen->id )
+		if ( 'edit-' . self::pt != $current_screen->id ) {
+			if ( self::pt == $current_screen->id )
 				wp_die( __( 'Invalid post type.', 'log-deprecated' ) );
 			return;
 		}
@@ -690,7 +749,7 @@ jQuery(document).ready( function($) {
 			$_GET['post_status'] = $_REQUEST['post_status'] = 'publish';
 
 		$this->options['last_viewed'] = current_time('mysql');
-		update_option( $this->option_name, $this->options );
+		update_option( self::option_name, $this->options );
 
 		global $wp_post_statuses;
 		// You didn't see this.
@@ -718,10 +777,10 @@ jQuery(document).ready( function($) {
 		);
 
 		if ( is_admin()
-			&& ( ! isset( $_REQUEST['post_type'] ) || $this->pt != $_REQUEST['post_type'] )
+			&& ( ! isset( $_REQUEST['post_type'] ) || self::pt != $_REQUEST['post_type'] )
 			&& $this->options && ! empty( $this->options['last_viewed'] ) )
 		{
-			$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_type = %s AND post_date > %s AND post_status = %s", $this->pt, $this->options['last_viewed'], 'publish' ) );
+			$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_type = %s AND post_date > %s AND post_status = %s", self::pt, $this->options['last_viewed'], 'publish' ) );
 			if ( $count )
 				$labels['menu_name'] = sprintf( __( 'Deprecated Calls %s', 'log-deprecated' ), "<span class='update-plugins count-$count'><span class='update-count'>" . number_format_i18n( $count ) . '</span></span>' );
 		}
@@ -743,7 +802,7 @@ jQuery(document).ready( function($) {
 			'rewrite'      => false,
 			'query_var'    => false,
 		);
-		register_post_type( $this->pt, $args );
+		register_post_type( self::pt, $args );
 	}
 
 	/**
@@ -758,9 +817,9 @@ jQuery(document).ready( function($) {
 	 */
 	function on_uninstall() {
 		global $wpdb;
-		$wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'deprecated_log'" );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->posts WHERE post_type = %s", self::pt ) );
 		$wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key LIKE '\_deprecated\_log\_%'" );
-		delete_option( 'log_deprecated_notices' );
+		delete_option( self::option_name );
 	}
 
 	/**
@@ -776,6 +835,6 @@ jQuery(document).ready( function($) {
 
 }
 /** Initialize. */
-$GLOBALS['deprecated_log_instance'] = new Deprecated_Log;
+new Deprecated_Log;
 
 endif;

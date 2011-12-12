@@ -2,8 +2,8 @@
 Contributors: nacin
 Tags: deprecated, logging, admin, WP_DEBUG, E_NOTICE, developer
 Requires at least: 3.0
-Tested up to: 3.2-alpha
-Stable tag: 0.2-RC1
+Tested up to: 3.4-alpha
+Stable tag: 0.2
 
 Logs the usage of deprecated files, functions, and function arguments, and identifies where the deprecated functionality is being used.
 
@@ -27,10 +27,6 @@ For an automatic installation through WordPress:
 1. Search for 'Log Deprecated Notices'
 1. Click 'Install Now' and activate the plugin
 1. View the log in the 'Tools' menu, under 'Deprecated Calls'
-
-Or use a nifty tool by WordPress lead developer Mark Jaquith:
-
-1. Visit [this link](http://coveredwebservices.com/wp-plugin-install/?plugin=log-deprecated-notices) and follow the instructions.
 
 For a manual installation via FTP:
 
@@ -59,3 +55,8 @@ These are the various things on the @todo:
 Want to add something here? I'm all ears. plugins at [andrewnacin.com](http://andrewnacin.com/) or @[nacin](http://twitter.com/nacin) on Twitter.
 
 I will prioritize these tasks based on feedback, so let me know what you'd like to see.
+
+== Upgrade Notice ==
+
+= 0.2 =
+Initial compatibility for WordPress 3.3.

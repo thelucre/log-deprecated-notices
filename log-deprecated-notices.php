@@ -6,9 +6,9 @@
  * Plugin Name: Log Deprecated Notices
  * Plugin URI: http://wordpress.org/extend/plugins/log-deprecated-notices/
  * Description: Logs the usage of deprecated files, functions, hooks, and function arguments, offers the alternative if available, and identifies where the deprecated functionality is being used. WP_DEBUG not required (but its general use is strongly recommended).
- * Version: 0.3-beta1
+ * Version: 0.3
  * Author: Andrew Nacin
- * Author URI: http://andrewnacin.com/
+ * Author URI: http://nacin.com/
  * License: GPLv2 or later
  */
 
@@ -736,12 +736,11 @@ jQuery(document).ready( function($) {
 	 * @todo [core] Custom post stati should have granular properties per post type.
 	 */
 	function action_load_edit_php() {
-		global $current_screen;
-		if ( 'edit-' . self::pt != $current_screen->id ) {
-			if ( self::pt == $current_screen->id )
-				wp_die( __( 'Invalid post type.', 'log-deprecated' ) );
+		$screen = get_current_screen();
+		if ( self::pt == $screen->id && ( $screen->action == 'add' || $_GET['action'] == 'edit' ) )
+			wp_die( __( 'Invalid post type.', 'log-deprecated' ) );
+		if ( self::pt != $screen->post_type )
 			return;
-		}
 
 		if ( ( empty( $_GET['post_status'] ) || 'all' == $_GET['post_status'] )
 			&& ( isset( $_GET['delete_all'] ) || isset( $_GET['delete_all2'] ) )

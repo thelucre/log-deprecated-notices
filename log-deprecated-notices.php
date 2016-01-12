@@ -185,8 +185,8 @@ class Deprecated_Log {
 			$hook = $backtrace[6]['args'][0];
 			$bt = 6;
 		}
-		$in_file = $this->strip_abspath( $backtrace[ $bt ]['file'] );
-		$on_line = $backtrace[ $bt ]['line'];
+		$in_file = array_key_exists('file', $backtrace[ $bt ]) ? $this->strip_abspath( $backtrace[ $bt ]['file'] ) : '';
+		$on_line = array_key_exists('line', $backtrace[ $bt ]) ? $backtrace[ $bt ]['line'] : '';
 		$this->log( 'function', compact( 'deprecated', 'replacement', 'version', 'hook', 'in_file', 'on_line'  ) );
 	}
 
